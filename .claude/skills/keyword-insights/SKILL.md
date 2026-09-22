@@ -210,7 +210,8 @@ two kinds that are not topics: a brand (a cluster anchored on "asana" makes
 ("management" is "task management" with the meaning removed).
 
 See `references/graph.md` for the node and edge schema and what each finding
-family reads off it.
+family reads off it, and `references/flow.md` for the whole machine in three
+diagrams — end to end, the control loop, and the network.
 
 ## Findings
 
@@ -319,6 +320,7 @@ improvements have already been tried, and several of them made things worse.
 | `scripts/report.py` | the markdown |
 | `scripts/jev.py` | typed Jev client, stdlib only |
 | `scripts/selftest.py` | offline and live checks |
+| `references/flow.md` | the whole data and algorithm flow, in three diagrams |
 | `references/jev-contract.md` | how to write a question Jev answers well |
 | `references/graph.md` | node and edge schema, finding families |
 | `evals/` | cases, harness, and the hill-climbing ledger |
