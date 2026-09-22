@@ -218,9 +218,8 @@ def offline() -> None:
     check("one claim per family",
           max(sum(1 for c in claims if c.kind == k)
               for k in {c.kind for c in claims}) == 1)
-    check("contradictory claims coexist before judging",
-          {"settled", "open"} <= {c.kind for c in claims} or
-          len([c for c in claims if c.kind in ("settled", "open")]) >= 1)
+    check("the least-branded topic is read one way, open or empty",
+          len({"open", "empty"} & {c.kind for c in claims}) == 1)
 
     print("permutations")
     g2 = K.Graph("garden rooms")
@@ -478,18 +477,22 @@ def offline() -> None:
           only_spiked.stats()["growth"] is None)
     open_c = next((c for c in tclaims if c.kind == "open"), None)
     empty_c = next((c for c in tclaims if c.kind == "empty"), None)
-    check("open ground says how many of them are there to buy",
-          open_c is not None and "commercial_share" in open_c.evidence
-          and "buying, comparing" in open_c.text)
-    check("the empty-ground rival is built from the same numbers",
-          empty_c is not None and open_c is not None
-          and empty_c.topic == open_c.topic
-          and empty_c.evidence["commercial_share"]
-          == open_c.evidence["commercial_share"])
-    check("open and empty contradict each other, as a pair should",
-          open_c is not None and empty_c is not None
-          and open_c.forbids != empty_c.forbids
-          and open_c.assertion != empty_c.assertion)
+    said = open_c or empty_c
+    check("unbranded ground says how many of them are there to buy",
+          said is not None and "commercial_share" in said.evidence
+          and ("buying, comparing" in said.text
+               or "buying or comparing" in said.text))
+    check("code, not the account test, decides open or empty — the topic's "
+          "buying share against the market's",
+          (open_c is None) != (empty_c is None) and said is not None
+          and ((open_c is not None) == (
+              said.evidence["commercial_share"] > 0
+              and round(100 * said.evidence["commercial_share"])
+              >= round(100 * said.evidence["market_commercial_share"]))))
+    check("and its rival is the mirror reading",
+          said is not None and (
+              ("no one there to sell to" in said.forbids) if open_c else
+              ("open ground" in said.forbids)))
     shape = report.render(tg, tclaims, threads[:2], dict(man, seed="seo tools"))
     with tempfile.TemporaryDirectory() as tmp:
         report.write_data(tmp, tg, tclaims, threads[:2], man)
@@ -701,6 +704,10 @@ def offline() -> None:
     judge.adjudicate(_Adj(0.62, 0.30), ms_graph, [major], "a founder")
     check("a majority on the account test is",
           major.survived() and major.verdict == "kept")
+    tie = one_claim()
+    judge.adjudicate(_Adj(0.50, 0.30), ms_graph, [tie], "a founder")
+    check("half is not a majority",
+          tie.verdict == "the data does not settle it")
     against = one_claim()
     judge.adjudicate(_Adj(0.20, 0.70), ms_graph, [against], "a founder")
     check("and the rival winning still says so",
@@ -974,6 +981,20 @@ def offline() -> None:
           and cv.variants_collapsed == 2)
     check("the same volume with a different series is a different search",
           "bim consulting" in cv.keywords)
+    abbr = K.Graph("bim services", "United States", "en")
+    abbr.add_rows([dict(row("bim services", 590, wave), cpc=30.02),
+                   dict(row("building information modeling services", 590,
+                            wave), cpc=30.02)])
+    check("any wording is the same search when the price matches to the cent",
+          list(abbr.keywords) == ["bim services"]
+          and abbr.keywords["bim services"].aliases
+          == ["building information modeling services"])
+    free = K.Graph("bim services", "United States", "en")
+    free.add_rows([dict(row("bim services", 590, wave), cpc=0.0),
+                   dict(row("building information modeling services", 590,
+                            wave), cpc=0.0)])
+    check("but a price of zero matches by chance, so it identifies nothing",
+          len(free.keywords) == 2)
     flat = K.Graph("x", "United States", "en")
     flat.add_rows([row("bim service", 10, [10] * 24),
                    row("bim services", 10, [10] * 24)])
@@ -1097,15 +1118,35 @@ def offline() -> None:
           len(start) == 1 and "bim modeling services" in start[0].headline
           and "y.com at 2" in start[0].text and "revit families" in
           start[0].text)
+    check("start here claims only the advantages its group has",
+          "more buyer money is behind them" in start[0].assertion
+          and "easier to reach" not in start[0].assertion
+          and "the most buyer money of the 2 groups" in start[0].text)
+    easy = O.start_here(wg, front[1], front, groups)
+    check("and says so when its group is the easier one",
+          "easier to reach" not in easy[0].assertion
+          or "lower than" in easy[0].text)
     door = O.open_door(wg, groups)
     check("the open door is the most buyer money on a weak page one",
           len(door) == 1 and "bim modeling services" in door[0].headline
           and O.open_door(wg, groups, groups[0]) == []
           and O.open_door(wg, groups[1:]) == [])
-    pair = O.weak_spots(wg, groups)
-    check("the weak-spot reading is a mirror pair for the account test",
-          {c.kind for c in pair} == {"weak_open", "weak_closed"}
-          and pair[0].assertion == pair[1].forbids)
+    pair = O.who_answers(wg, groups)
+    check("who answers buyers first is the kind ahead of every other, with "
+          "the runner-up as its rival",
+          len(pair) == 1 and pair[0].kind == "who_answers"
+          and pair[0].headline.endswith("specialist firms")
+          and "forum threads" in pair[0].forbids
+          and pair[0].evidence["frame"] == O.ANSWER_FRAMES["specialist"]
+          and pair[0].assertion.endswith(O.ANSWER_MOVES["specialist"] + "."))
+    # Position 2 weighs what positions 3, 4 and 9 weigh together.
+    tied = O.Cluster(list(groups[0].keywords), page=[
+        {"rank": 2, "kind": "list"}, {"rank": 3, "kind": "specialist"},
+        {"rank": 4, "kind": "specialist"}, {"rank": 9, "kind": "specialist"}])
+    check("and nothing is said when no kind is ahead as printed",
+          round(100 * O.market_split([tied])["list"])
+          == round(100 * O.market_split([tied])["specialist"])
+          and O.who_answers(wg, [tied, tied]) == [])
     costs = O.customer_cost(wg)
     check("one kind of buyer with a single search is not split out",
           len(costs) == 1 and costs[0].headline.startswith("A lead costs")
@@ -1161,7 +1202,7 @@ def offline() -> None:
     defs = topic_market([
         ("revit price", 1000, "bim software", "buy", ["revit"]),
         ("buy revit", 500, "bim software", "buy", ["revit"]),
-        ("bim software", 6600, "bim software", "compare", []),
+        ("bim software", 6600, "bim software", "learn", []),
         ("what is building information management", 5400,
          "building information management", "learn", []),
         ("building information management guide", 900,
@@ -1173,6 +1214,15 @@ def offline() -> None:
           settled and "building information management" not in settled[0].text
           and "bim services" in settled[0].headline
           and "shopping" in settled[0].text)
+    thin_lead = [c for c in insights.generate(topic_market([
+        ("revit price", 1000, "bim software", "buy", ["revit"]),
+        ("bim software", 6600, "bim software", "compare", []),
+        ("buy revit", 500, "bim software", "buy", ["revit"]),
+        ("bim services", 590, "bim services", "buy", []),
+        ("bim modeling services", 390, "bim services", "buy", [])]))
+        if c.kind == "settled"]
+    check("settled needs most of the shoppers to name a company",
+          thin_lead == [])
     diy = [("free bim software", 800, "bim software", "self_serve", []),
            ("revit crack", 300, "bim software", "self_serve", ["revit"])]
     base = [("revit price", 1000, "bim software", "buy", ["revit"]),
@@ -1198,6 +1248,69 @@ def offline() -> None:
     except Exception as exc:  # noqa: BLE001 — the regression is any raise
         check("the threshold arm reads the where-to-win families", False,
               repr(exc))
+
+    money_md = report.render(wg, [], [], man, "d", {"opportunities": groups})
+    check("the report says where the reachable buyer money is, as a "
+          "measurement", "Where the buyer money is: **“bim modeling "
+          "services”**" in money_md and "opportunities.csv" in money_md)
+    check("and says nothing of it when no group was read",
+          "Where the buyer money is" not in report.render(
+              wg, [], [], man, "d", {"opportunities": []}))
+
+    amb = topic_market([
+        ("project management software", 1000, "project management software",
+         "compare", []),
+        ("pm software", 5000, "project management software", "compare", []),
+        ("project management software jobs", 100,
+         "project management software", "career", []),
+        ("task management", 4000, "task management", "learn", []),
+        ("task tracker", 3000, "task management", "compare", [])])
+    amb.keywords["project management software jobs"].job_certain = False
+    amb.keywords["task tracker"].job_certain = False
+    ambiguity = next((c for c in insights.generate(amb)
+                      if c.kind == "ambiguity"), None)
+    shares = [int(x.split("(")[1].split("%")[0])
+              for x in ambiguity.evidence["least_legible_topics"]] \
+        if ambiguity else []
+    check("a topic's clear share is over the searches placed on it, never "
+          "past 100%", shares and max(shares) <= 100)
+
+    m24 = [f"{y}-{m:02d}" for y in (2024, 2025) for m in range(1, 13)]
+    flat_market = K.Graph("cad to bim", "United States", "en")
+    flat_rows = []
+    for t, topic, base in (("bim services", "bim services", 1000),
+                           ("bim consulting", "bim services", 800),
+                           ("revit", "revit", 2000),
+                           ("revit price", "revit", 900)):
+        series = [base + (i % 3) for i in range(12)] + \
+                 [round(base * 0.996) + (i % 3) for i in range(12)]
+        flat_rows.append({"term": t, "volume": base, "cpc": 5.0,
+                          "competition_index": 20, "low_bid": 1.0,
+                          "high_bid": 9.0, "trend": series, "months": m24,
+                          "source": "site:a.com"})
+    flat_market.add_rows(flat_rows)
+    for t, topic in (("bim services", "bim services"),
+                     ("bim consulting", "bim services"),
+                     ("revit", "revit"), ("revit price", "revit")):
+        kw = flat_market.keywords[t]
+        kw.topic, kw.topic_confidence = topic, 0.9
+        kw.job, kw.job_confidence, kw.job_certain = "compare", 0.9, True
+        flat_market.add_topic(topic, confirmed=True)
+    check("a market at 1.00x as printed is neither growing nor shrinking",
+          not any(c.kind == "direction"
+                  for c in insights.generate(flat_market)))
+
+    import random
+    rng = random.Random(7)
+    lower = [1000 + rng.randint(-40, 40) for _ in range(12)]
+    higher = [1400 + rng.randint(-40, 40) for _ in range(12)]
+    same = [1000 + rng.randint(-40, 40) for _ in range(12)]
+    check("a year that stands apart from the last is a direction",
+          K.shifted(lower, higher) and K.shifted(higher, lower))
+    check("a year among the last one's months is not, whatever its median",
+          not K.shifted(lower, same))
+    check("a spiked month cannot manufacture one",
+          not K.shifted(lower, same[:11] + [90000]))
 
     print("the value floor")
     def _stakes(probabilities):

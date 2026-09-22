@@ -104,6 +104,7 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim], trail: Sequence,
              f"{n(graph.total_volume)} a month; what the person wanted was "
              f"readable for {pct(readable)} of that searching.")
     L += _paid_line(manifest.get("forecast"))
+    L += _money_line((extra or {}).get("opportunities"), folder)
     L.append("")
 
     if kept:
@@ -169,6 +170,33 @@ def _paid_line(fc: dict | None) -> list[str]:
     return [line]
 
 
+def _money_line(groups, folder: str) -> list[str]:
+    """Where the most buyer money a newcomer could answer sits — stated, as
+    the paid line is, because it is a measurement.
+
+    Whether that is the place to *start* is a judgment, and it is tested
+    as the `start_here` finding: on `cad to bim` the answer was a coin flip
+    — the most money, behind a first page of specialist firms, falling to
+    0.64x — and it did not survive. The measurement stands either way, and
+    the reader should not have to open a file to see it (it-23).
+    """
+    cands = O.candidates(groups or [])
+    if not cands:
+        return []
+    top = max(cands, key=lambda c: (c.open_prize, c.anchor.term))
+    kd = (f", difficulty {top.difficulty:.0f} of 100"
+          if top.difficulty is not None else "")
+    grow = (f", {top.growth:.2f}x the year before"
+            if top.growth is not None else "")
+    return [f"Where the buyer money is: **“{top.anchor.term}”** carries the "
+            f"most a newcomer could answer — {money0(top.open_prize)} a month "
+            f"of clicks across {n(len(top.keywords))} "
+            f"search{'es' if len(top.keywords) != 1 else ''} Google answers "
+            f"with the same pages{kd}{grow}; page one is "
+            f"{O.page_one_words(top)}. All {n(len(cands))} groups are in "
+            f"`{folder}/opportunities.csv`."]
+
+
 def _insight(i: int, claim: judge.Claim, arm: str) -> list[str]:
     L = [f"## {i}. {claim.headline or claim.text}", "", claim.text, ""]
     offers = claim.evidence.get("every_offering")
@@ -193,7 +221,7 @@ def _insight(i: int, claim: judge.Claim, arm: str) -> list[str]:
     if claim.examples:
         L += ["Behind it: " + " · ".join(f"`{e}`" for e in claim.examples[:4]),
               ""]
-    why = O.frame(claim.kind)
+    why = claim.evidence.get("frame") or O.frame(claim.kind)
     if why:
         L += [f"*Why it matters — {why}*", ""]
     L += [_scores(claim, arm), ""]
@@ -236,14 +264,13 @@ def _opportunity_table(claim: judge.Claim) -> list[str]:
                                     f"({KIND_NAMES.get(r['kind'], r['kind'] or '?')})"
                                     for r in page))
         return out + [""]
-    if claim.kind in ("weak_open", "weak_closed"):
+    if claim.kind == "who_answers":
         split = ev.get("clicks_by_kind") or {}
         if not split:
             return []
         return (["| what holds page one | share of buyers' page-one clicks |",
                  "|---|---:|"]
-                + [f"| {KIND_NAMES.get(k, k)} | {pct(v)} |"
-                   for k, v in split.items()] + [""])
+                + [f"| {k} | {pct(v)} |" for k, v in split.items()] + [""])
     if claim.kind == "customer_cost" and len(ev.get("by_offering") or []) >= 2:
         return (["| wants | buying searches/mo | average click | cost of a "
                  "lead |", "|---|---:|---:|---:|"]

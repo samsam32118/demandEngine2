@@ -941,9 +941,9 @@ class Run:
             self.stage(st)
             chosen = next((c for c in front if c.anchor.term == pick), None)
 
-        claims = (O.start_here(g, chosen, front)
+        claims = (O.start_here(g, chosen, front, groups)
                   + O.open_door(g, groups, chosen)
-                  + O.weak_spots(g, groups)
+                  + O.who_answers(g, groups)
                   + O.customer_cost(g)
                   + O.who_owns(g, shares, O.domain_kinds(groups))
                   + O.share_of_search(g) + O.switching(g) + found

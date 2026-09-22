@@ -334,7 +334,7 @@ and share of voice from DataForSEO, and tested like every other finding:
 |---|---|---|---|
 | `start_here` | [Pain Point SEO](https://www.growandconvert.com/seo/pain-point-seo/) (Grow and Convert), [Ahrefs' difficulty](https://ahrefs.com/blog/ahrefs-seo-metrics/), Moore's beachhead | buying searches grouped by **three shared top-ten results** — Google's own judgment that one page can answer them ([SE Ranking's grouping level](https://seranking.com/blog/keyword-clustering/)); code keeps the groups nothing beats on buyer money naming no company, difficulty and first-page weakness at once, and Jev picks among them, each described in words | *Start with "bim modeling services": $50,713 a month of buyer clicks, difficulty 9, page one seven specialist firms* |
 | `open_door` | weak-spot SERP analysis ([Detailed](https://detailed.com/forum-serps/), [Semrush](https://www.semrush.com/blog/finding-serp-weak-spots/)) | the group with the most buyer money on pages not built for it — forum, social, off-target — weighted by position | *The door left open is "bim modeling software": reddit.com at 1* |
-| `weak_open` / `weak_closed` | the same, for the whole market | where buyers' page-one clicks go, by kind of page, weighted by position and by what each group is worth | *Buyers here are answered by businesses built for them* |
+| `who_answers` | the kind of page ahead on buyers' first pages, and what practitioners do about it — [Barnacle SEO](https://barnacleseo.com/) (Will Scott) when directories hold it, head-on when specialists do, the weak-spot move when forums do | where buyers' page-one clicks go, by kind of page, weighted by position and by what each group is worth; named only when one kind is ahead as printed | *Buyers here are answered first by directories and review sites* |
 | `customer_cost` | [channel–model fit](https://brianbalfour.com/essays/channel-model-fit-for-user-acquisition) (Brian Balfour) | average buyer click, by what the buyer wants, over the [4.78% bottom-of-funnel lead rate](https://www.growandconvert.com/conversion-rate-optimization/average-seo-conversion-rate/) Grow and Convert measured | *A lead for services costs $749 through search; for software, $103* |
 | `who_owns` / `who_owns_not` | share of voice | Labs' estimate of the clicks each site takes across the buying searches; forums and articles counted in the whole, but not as who a newcomer competes with | *No business owns buyer search here* |
 | `share_of_search` | [share of search](https://ipa.co.uk/effworks/effworksglobal-2020/share-of-search-as-a-predictive-measure) (Les Binet, IPA) | each named brand's share of the branded searching, a year apart | *"revit" is taking share of search from "autocad"* |
@@ -357,6 +357,23 @@ count**; and it could never offer the services groups, which hold the
 market's buyer money behind first pages of small specialist firms at
 difficulty under 25, so **difficulty is one of the counts**. Each finding
 says which framework found it, beneath it in the report.
+
+## Where the buyer money is
+
+The second line under the title is a measurement too: the group of buying
+searches with the most money in it that a newcomer could answer — searches
+naming no company, grouped by page one — with its difficulty, its year on
+year and what holds its first page:
+
+> Where the buyer money is: **"bim modeling services"** carries the most a
+> newcomer could answer — $50,713 a month of clicks across 6 searches Google
+> answers with the same pages, difficulty 9 of 100, 0.64x the year before;
+> page one is 7 specialist firms and 1 directory or review site.
+
+Whether that is the place to *start* is a judgment, tested as the
+`start_here` finding, and on `cad to bim` it is a genuinely mixed case —
+the most money, behind specialists, falling by a third — that survives in
+some runs and not others. The measurement stands either way.
 
 ## What paid search can buy
 
@@ -448,6 +465,15 @@ confident-looking number with no confidence behind it:
 | **account** | Which of these two accounts of the market does the data support? | claims whose opposite fits the data better |
 | **swap** | With its subject replaced by an unrelated one, does this still read as fair? | statements that were never about this market |
 | **guessable** | Could someone say this knowing only the market's name? | findings the data did not pay for |
+
+**A premise has to hold as printed.** Code checks each sentence's own
+numbers before it is built — a direction is only "growing" or "shrinking"
+when the year's twelve months stand apart from the twelve before (a
+Mann-Whitney test at the conventional 5%), "settled" means most of the
+shoppers name a company, "open ground" means at least the market's own
+share is buying, and a share can never pass 100%. Each of those rules came
+from a report that printed a sentence its numbers contradicted (it-21,
+it-23).
 
 Surprise is also measured, but only orders the results: it is evidence
 about how much a finding matters, not whether it is true — gating on it

@@ -1443,3 +1443,203 @@ caveat, "No insights" when nothing survives — and the three that read the
 network section by its wording now read the file. The code arm's new
 failure is `thin-niche/code`: the new families gave its hand-tuned
 thresholds more to keep. Not re-tuned, as in it-19.
+
+## it-23 — the practitioners' questions, and a market held to page one
+
+Asked for: *critique the insights — "it sucks" — look at the best people in
+this game, the frameworks they use, and use their heuristics with the tools
+available to make an insight search engine: keyword and effort in, insights
+out.*
+
+### The critique
+
+The `cad to bim` report at effort 5, before this iteration:
+
+| # | insight | what was wrong with it |
+|---:|---|---|
+| 1 | The open ground is "modelling" | built on searches the loop invented: `top modelling` (8,100 a month — modelling agencies), `modelling jobs`, `what is modelling`, `how to modelling`. Fashion, not BIM |
+| 2 | "modelling" is unclaimed, and nobody is there to buy | the same junk from the other side |
+| 3 | "bim software" is settled and "modelling" is not | a definition names no company because nobody buys there |
+| 4 | The competitor is doing without | 3% of the searching; the headline said the opposite of its number |
+| 5 | The growth is in "bim software" | true, colour |
+| 6 | The open ground is in services, not software | good — the kind the user asked for more of |
+| 7 | Nobody owns buyer search | quora and reddit took 41% of buyer clicks, unsaid; `www.` in every domain |
+| 8 | A lead costs $174 | a blend of fashion `top modelling` and $219 service clicks that fits no business |
+| 9 | The money is in services, not information | "information" inflated by `modelling 3d`, 135,000 a month of general 3D |
+| 10 | revit is taking share from autocad | two points; colour |
+
+Three failures at once. **Garbage in**: every guard compared sizes, and a
+harvested `modelling 3d` at 135,000 raised the ceiling `invented_giants`
+compares against, so a probe's `top modelling` passed beneath it — and 20%
+of the market was Google's close variants counted twice. **Statistics, not
+decisions**: nothing said where to start, what a customer costs, who to beat
+or what a newcomer could win. **A floor that did not hold**: five of the ten
+were labelled *Colour* — the floor asked which stakes level was likeliest
+while the report printed the level nearest the mean, and on spread-out
+answers the two disagree (126 of the last 400 cached stakes answers).
+
+### What the practitioners do, and what each became
+
+| who | heuristic | became |
+|---|---|---|
+| Grow and Convert, Pain Point SEO | value demand by readiness to buy; BOFU converted 4.78% against 0.19% | the buying core; `customer_cost` |
+| Keyword Insights, SE Ranking | three shared top-ten URLs = one page's work | `serp_clusters` |
+| Glen Allsopp (Detailed), Semrush | forum, social or off-target pages on page one are a door left open | `open_door` |
+| Will Scott, Barnacle SEO | where directories rank, get onto the directories | `who_answers`, when directories hold the page |
+| Ahrefs | traffic value and difficulty together, never volume alone | the beachhead's counts; Labs difficulty |
+| Geoffrey Moore | a beachhead you can win outright | `start_here` |
+| Brian Balfour | channel–model fit | `customer_cost`, by offering |
+| Les Binet (IPA) | share of search leads market share | `share_of_search` |
+| Bob Moesta | the push away from what people have | `switching` |
+| Eli Schwartz | one template for a repeatable pattern | `pattern` |
+| "why now" | demand that did not exist | `new_demand` |
+| everyone | search it and look | **grounding** |
+
+### Grounding: the market held to page one
+
+The market's 50 largest searches and its 60 most valuable buying searches
+(effort 5) are each read against their first page from DataForSEO's SERP
+API ($0.002 a page), and Jev answers the relevance question again with the
+pages in front of it — same criteria, so "in this market" keeps one
+definition. Dropping one lets the next largest into the head; the head may
+take four times its size in pages a run, because at twice, `cad to bim`
+spent the allowance on its four harvests and the probes after them went
+unread. On `cad to bim` it asked 179 questions and dropped about 90,600
+searches a month: template junk (`services provider`, `what is services`, `cheap
+services`), general 3D (`architectural models`), hardware (`eva scanner`)
+and Autodesk's wider catalogue. `top modelling` and `modelling 3d` never
+got in. It is noisy at the boundary, disclosed not fixed: `revit software`
+dropped in one run and `revit price` kept; "is BIM software part of the cad
+to bim market" is a real judgment call and the model flips on it.
+
+### Close variants, whatever their words
+
+Google gives a close-variant cluster one set of numbers. it-23's first
+merge required the words to differ by one stem, and left 19.9% of `cad to
+bim` counted twice: `bim services` / `building information modeling
+services`, `revit price` / `revit software cost`, `bim consultant` / `bim
+consulting services` — same volume, same click price to the cent, same
+varying two-year series. That fingerprint no coincidence produces, so a
+matching non-zero price now merges any wording; a price of zero matches by
+chance and identifies nothing. No priced twin remains in either market run.
+
+### Where to win
+
+Buying searches are clustered by page one, each cluster's first page read
+by Jev result by result, its clicks split by position with First Page
+Sage's 2026 CTR curve as relative weights.
+
+**Where to start went wrong twice before it went right.** Ranked by forum-
+held clicks, the first pick was `revit price` — people pricing Autodesk's
+own product — so only searches naming no company count. Then it could never
+offer the services groups, which hold the buyer money ($50,713 a month for
+`bim modeling services`) behind first pages of small specialist firms at
+difficulty 9 — so difficulty is a count, and so is growth, since that group
+had fallen to 0.64x unseen. Code keeps the groups nothing beats on all four
+at once and Jev picks among them in words: `bim modeling services`,
+confidence 0.77–0.81.
+
+**And then the tests are honest about it.** Its fair reading ran 0.30,
+0.40, 0.53 and 0.54 across four runs, and seven rephrasings moved it no
+more than that: the most money, behind specialists, falling by a third, is
+a genuinely mixed case, and it survives in some runs and not others.
+Whether it is the place to start is a judgment; where the money is is a
+measurement, so it is now stated under the title like the paid line —
+"Where the buyer money is: “bim modeling services” carries the most a
+newcomer could answer".
+
+**Built, measured, and replaced.** A `weak_open` / `weak_closed` mirror
+pair: "often answered by pages not built for them" is a magnitude, and the
+account test chose it at 0.97 on 9% (cad to bim) and kept it at 11% (the
+AnswerThePublic space), while what the numbers held went unsaid:
+directories and review sites took 48% of buyers' page-one clicks there.
+Now `who_answers` names the kind of page ahead as printed, with the runner-
+up as its rival — and the practitioner move in the assertion, because
+"who holds the page" alone was read as changing nothing in both markets.
+
+### The old families, fixed where the critique found them
+
+- **`settled`** is measured among the people shopping in each topic, and
+  "settled" means most of them name a company: "keyword tool is settled"
+  led the AnswerThePublic report at 3%.
+- **`open` / `empty`**: code compares the topic's buying share with the
+  market's and builds the one that holds. The account test chose "open
+  ground" at 0.78 for a topic with 0% buying.
+- **`selfserve`** is made only when more of the searching is doing without
+  than shopping.
+- **`gradient`** needs a narrowing that shows at the precision it prints
+  and sits above Google's 10-a-month reporting floor: `bim drawing software`
+  at 10 a month was "3.7x the price for 0% of the volume".
+- **`ambiguity`** divided the searches placed on a topic by the searches
+  whose words contain its name — two sets — and sent "project management
+  software (121% clear)" to the judge. Both sides are now the searches
+  placed on the topic.
+- **`direction`** is decided on the figure as printed, and only when this
+  year's twelve months stand apart from last year's (a two-sided Mann-
+  Whitney U test at the conventional 5%). "This market is shrinking: …
+  1.00x the twelve before" led one run, with every exception rising; the
+  next run said 0.99x, and ranked it first. Twelve months that sit among
+  the twelve before them are not a direction. The AnswerThePublic space's
+  0.33x still is.
+- **Majorities are majorities.** Fair reading, the account test and the
+  value floor all need more than half; "Start with “seo keyword research
+  tools”" was kept on 0.50 and 0.50. The floor keeps a finding only when
+  more than half the stakes weight is on "a choice" or "a reversal", and
+  the label printed is the likelier level on that side.
+
+### Before and after
+
+| | `cad to bim` before | after | AnswerThePublic before | after |
+|---|---:|---:|---:|---:|
+| searches in the market | 408,360 | 154,180 | 795,180 | 73,530 |
+| insights | 10 | 8 | 6 | 9 |
+| resting on invented or off-market searches | top 3 | 0 | — | 0 |
+| labelled Colour | 5 | 0 | 1 | 0 |
+| first pages read | 9 | 180 | 0 | 138 |
+| data, fresh run | $0.81 | $0.78 | $0.47 | $0.49 |
+| judgment, uncached | $0.07 | $0.09 | $0.05 | $0.06 |
+
+`cad to bim` after, in order: **a services lead costs $780 through search,
+a software lead $110**; most of the searching is learning, except services
+at 85% shopping; buyers are answered first by specialist firms, so a
+newcomer competes head-on; the open ground is in services, not software
+(9% of services shoppers name a company, 77% of software shoppers); the
+money is in services, not information; a gradient, a split, and a two-point
+share-of-search move. Under the title: *where the buyer money is — "bim
+modeling services", $50,713 a month, difficulty 9, falling to 0.64x, page
+one seven specialist firms*. The AnswerThePublic space: start with "seo
+keyword research tools" (the most money, at difficulty 74 and 0.47x — the
+report says both); no business owns buyer search; a software lead costs
+$466, an information lead $190; "keyword suggestion" is unclaimed and
+nobody there is buying; the market is shrinking (0.33x); doing without
+outnumbers shopping; buyers meet directories and review sites first
+(Barnacle SEO).
+
+Run to run, findings near 0.5 still come and go — `start_here` and
+`settled` among them. Disclosed, not tuned away.
+
+### Also
+
+- **Bright Data is gone.** The SERP had been scraped through a third
+  vendor and parsed out of markdown, against the rule that the skill runs
+  on Jev and DataForSEO alone; the previous delivery said otherwise, which
+  was wrong. Page one now comes typed from DataForSEO.
+- **Eight pages at once.** A page takes 4–16 seconds; 110 in a row was a
+  quarter of an hour. **A budget check per action**: a flat $0.10 reserve
+  refused $0.002 pages near the ceiling. Ceilings rose to $0.40–$2.20.
+- **The threshold arm** crashed on the new families (a list where it
+  expected a count); it now keeps them as built, and a selftest holds it.
+
+### The suite
+
+| | before | after |
+|---|---:|---:|
+| selftest | 154/154 | **199/199** |
+| evals, jev arm | 22/22 | 21/22 |
+| evals, code arm | 19/21 | 19/21 |
+
+The jev arm's miss is `broad-competitive`'s "do not reveal what the person
+wants". Its evidence carried the 121% share above; fixed, the finding reads
+fair (0.59) and wins its account (0.72), and the value floor now judges it
+background — 40% that it changes a founder's decision. Recorded, not
+relabelled.

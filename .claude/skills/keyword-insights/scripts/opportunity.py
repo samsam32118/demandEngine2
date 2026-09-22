@@ -104,8 +104,6 @@ FRAMES = {
                   "money is real and the first page can be beaten — one page's "
                   "worth of searches, by SERP clustering.",
     "open_door": _WEAK_SPOT,
-    "weak_open": _WEAK_SPOT,
-    "weak_closed": _WEAK_SPOT,
     "customer_cost": "Channel–model fit (Brian Balfour): what a customer costs "
                      "in a channel has to fit what the business earns from "
                      "one.",
@@ -384,7 +382,9 @@ def pareto(cands: Sequence[Cluster]) -> list[Cluster]:
     """The candidates no other candidate beats on every count at once.
 
     More buyer money naming no company, easier to reach page one, more of
-    its clicks on pages not built for it. Where either side lacks a
+    its clicks on pages not built for it, growing faster. The first pick on
+    `cad to bim` was a group whose searching had fallen to 0.64x, and
+    nothing in the choice could see it. Where either side lacks a
     measurement that count is left out of the comparison rather than
     guessed. What survives is a set of genuine trade-offs, and choosing
     among those is judgment — Jev's.
@@ -392,7 +392,7 @@ def pareto(cands: Sequence[Cluster]) -> list[Cluster]:
     def dims(c: Cluster) -> list[float | None]:
         return [c.open_prize,
                 None if c.difficulty is None else -c.difficulty,
-                c.weak_share]
+                c.weak_share, c.growth]
 
     def beats(a: Cluster, b: Cluster) -> bool:
         pairs = [(x, y) for x, y in zip(dims(a), dims(b))
@@ -426,6 +426,7 @@ def rank_words(cands: Sequence[Cluster]) -> dict[str, str]:
     prize = place(lambda c: c.open_prize)
     easy = place(lambda c: c.difficulty, reverse=False)
     weak = place(lambda c: c.weak_share)
+    grow = place(lambda c: c.growth)
     out = {}
     for c in cands:
         h = c.anchor.term
@@ -443,6 +444,12 @@ def rank_words(cands: Sequence[Cluster]) -> dict[str, str]:
         else:
             parts.append(f"its first page is all pages built for it: "
                          f"{page_one_words(c)}")
+        if h in grow:
+            parts.append(f"the {_ordinal(grow[h])}fastest growing of the "
+                         f"{total}: "
+                         + (f"searched {c.growth:.2f}x as much as the year "
+                            f"before" if round(c.growth, 2) >= 1 else
+                            f"falling, at {c.growth:.2f}x the year before"))
         out[h] = "; ".join(parts)
     return out
 
@@ -452,8 +459,23 @@ def _group_words(c: Cluster) -> str:
             f"pages" if len(c.keywords) > 1 else "one search")
 
 
+def standing(c: Cluster, clusters: Sequence[Cluster]) -> dict:
+    """Where one group stands among every group read, counted by code so
+    the sentence can say it in words."""
+    read = [o for o in candidates(clusters)]
+    known = [o for o in read if o.difficulty is not None]
+    return {
+        "groups": len(read),
+        "richer": sum(1 for o in read if o.open_prize > c.open_prize),
+        "harder": (None if c.difficulty is None else
+                   sum(1 for o in known if o.difficulty > c.difficulty)),
+        "measured": len(known),
+    }
+
+
 def start_here(graph: K.Graph, chosen: Cluster | None,
-               front: Sequence[Cluster]) -> list[Claim]:
+               front: Sequence[Cluster],
+               clusters: Sequence[Cluster] = ()) -> list[Claim]:
     """Moore's beachhead: of the genuine trade-offs, the one Jev picked.
 
     Code removes every group another beats on buyer money, difficulty and
@@ -462,20 +484,36 @@ def start_here(graph: K.Graph, chosen: Cluster | None,
     for a company by name is not a candidate at any size: on `cad to bim`
     the first "start here" was `revit price` — people pricing Autodesk's
     own product (it-23).
+
+    The sentence says where the pick stands among every group read, and
+    the assertion claims only the advantages it has. "The pages answering
+    them can be beaten", said of a first page of seven specialist firms,
+    rested on a difficulty score nothing in the sentence compared, and
+    fair reading put it at 0.40-0.53 across two runs.
     """
     if chosen is None:
         return []
     c, head = chosen, chosen.anchor.term
+    where = standing(c, clusters or front)
+    total = where["groups"]
     want = {"service": "hiring someone to do it",
             "software": "choosing a tool",
             "product": "buying it"}.get(c.offering, "buying or comparing")
-    parts = [f"{_group_words(c)}, {n(c.buyers)} a month from people {want}, "
-             f"worth {money0(c.prize)} a month at today's click prices "
-             f"({usd(c.click_price)} a click)"
+    richest = where["richer"] == 0 and total > 1
+    easier = (where["harder"] is not None and where["measured"] > 1
+              and where["harder"] * 2 > where["measured"])
+    money = (f"the most buyer money of the {n(total)} groups of buying "
+             f"searches read — " if richest else "")
+    parts = [f"{money}{_group_words(c)}, {n(c.buyers)} a month from people "
+             f"{want}, worth {money0(c.prize)} a month at today's click "
+             f"prices ({usd(c.click_price)} a click)"
              + (f", {money0(c.open_prize)} of it in searches naming no "
                 f"company" if round(c.open_prize) < round(c.prize) else "")]
     if c.difficulty is not None:
-        parts.append(f"difficulty {c.difficulty:.0f} of 100")
+        parts.append(f"difficulty {c.difficulty:.0f} of 100"
+                     + (f", lower than {n(where['harder'])} of the "
+                        f"{n(where['measured'])} groups measured" if easier
+                        else ""))
     if c.weak_results:
         parts.append(f"pages not built to answer it — {_weak_list(c)} — sit "
                      f"where {pct(c.weak_share)} of its page-one clicks go")
@@ -490,17 +528,27 @@ def start_here(graph: K.Graph, chosen: Cluster | None,
             f"“{o.anchor.term}” ({money0(o.open_prize)} a month"
             + (f", difficulty {o.difficulty:.0f}" if o.difficulty is not None
                else "") + ")" for o in others) + "."
+    reasons = ["they are there to buy"]
+    if richest:
+        reasons.append("more buyer money is behind them than behind any other "
+                       "group of searches here")
+    if easier:
+        reasons.append("their first page is easier to reach than most here")
+    if c.weak_results:
+        reasons.append("part of their first page is held by pages not built "
+                       "for them")
+    assertion = (f"The best first place to compete in this market is people "
+                 f"searching for “{head}”: " + ", ".join(reasons[:-1])
+                 + (" and " if len(reasons) > 1 else "") + reasons[-1] + ".")
     return [_claim(
         graph, "market|start_here", "start_here",
         f"Start with “{head}”",
-        text,
-        f"The best first place to compete in this market is people searching "
-        f"for “{head}”: they are there to buy, the money behind them is "
-        f"real, and the pages answering them now can be beaten.",
+        text, assertion,
         f"People searching for “{head}” are not the place to start: "
-        f"there is little money behind them, or the pages answering them now "
-        f"are too strong to beat.",
+        f"another group of buying searches here offers more money, or a first "
+        f"page that is easier to win.",
         {"start_with": head, **c.row(),
+         "among_the_groups_read": where,
          "searches_in_it": [f"{k.term} ({n(k.volume)}/mo, {usd(k.cpc)})"
                             for k in sorted(c.keywords,
                                             key=lambda k: -k.money)[:8]],
@@ -545,58 +593,94 @@ def open_door(graph: K.Graph, clusters: Sequence[Cluster],
         _examples(sorted(c.keywords, key=lambda k: -k.money)[:6]), c.topic)]
 
 
-def weak_spots(graph: K.Graph, clusters: Sequence[Cluster]) -> list[Claim]:
-    """Whether buyers here are answered by pages built for them: a pair of
-    readings of one measurement, left to the account test."""
+# Each kind of page, as the report names it.
+KIND_WORDS = {"specialist": "specialist firms",
+              "major_brand": "household names",
+              "list": "directories and review sites",
+              "publication": "articles and guides",
+              "community": "forum threads, social posts and press releases",
+              "off_target": "pages about something else"}
+
+# What the practitioners do about each kind holding the first page. Written
+# once, like the templates; the finding carries the one that applies.
+ANSWER_FRAMES = {
+    "list": "Barnacle SEO (Will Scott, Search Influence): where directories "
+            "and review sites hold the first page, the quickest way onto it "
+            "is a place on the pages that already rank.",
+    "specialist": "Where specialist firms hold the first page, buyers expect "
+                  "a specialist: a newcomer competes head-on, page for page, "
+                  "and difficulty says how hard that is.",
+    "major_brand": "Where household names hold the first page, the head "
+                   "searches are a fight against trust already earned; "
+                   "Moore's beachhead is somewhere narrower.",
+    "publication": "Where articles and guides hold the first page, buyers are "
+                   "still learning: the page that wins teaches first (Pain "
+                   "Point SEO, Grow and Convert).",
+    "community": _WEAK_SPOT,
+    "off_target": _WEAK_SPOT,
+}
+
+
+# What each kind holding the first page means for a newcomer, in the
+# assertion's own words: a finding that stops at "who holds the page" was
+# read as changing nothing, in both markets it was first tried on (it-23).
+ANSWER_MOVES = {
+    "list": "so the way onto their first page is a place on the directories "
+            "and review sites that already rank",
+    "specialist": "so a newcomer competes head-on with specialist firms, page "
+                  "for page",
+    "major_brand": "so the searches with the most in them are a fight against "
+                   "established names, and the way in is narrower",
+    "publication": "so the page that wins them is one that teaches",
+    "community": "so a page built for these buyers has room to win",
+    "off_target": "so a page built for these buyers has room to win",
+}
+
+
+def who_answers(graph: K.Graph, clusters: Sequence[Cluster]) -> list[Claim]:
+    """Which kind of page buyers find first, across the market.
+
+    It began as a mirror pair — "buyers are often answered by pages not
+    built for them" and its opposite — and "often" is a magnitude, which
+    Jev cannot judge: on `cad to bim` it chose "often" at 0.97 over 9%, and
+    on the AnswerThePublic space it kept "often" at 11%, while the finding
+    the numbers held went unsaid — directories and review sites took 48% of
+    the buyers' clicks there. So code names the kind ahead of every other,
+    by the precision the sentence prints, and the finding carries what
+    practitioners do about that kind (it-23).
+    """
     split = market_split(clusters)
     read = [c for c in clusters if c.split and c.prize > 0]
-    if len(read) < 2 or not split:
+    if len(read) < 2 or len(split) < 2:
         return []
-    weak = sum(split.get(k, 0.0) for k in WEAK)
-    spec, major = split.get("specialist", 0.0), split.get("major_brand", 0.0)
-    lists, pubs = split.get("list", 0.0), split.get("publication", 0.0)
-    worst = max(read, key=lambda c: (c.weak_share, c.prize))
-    across = (f"across the {n(len(read))} groups of buying searches read, "
-              f"weighted by what each is worth")
-    rest = (f"directories and review sites {pct(lists)}, articles and "
-            f"guides {pct(pubs)}")
-    open_text = (f"forum threads, social posts and off-target pages sit where "
-                 f"{pct(weak)} of the page-one clicks go {across}; specialist "
-                 f"firms {pct(spec)}, household names {pct(major)}, {rest}")
-    closed_text = (f"specialist firms and household names sit where "
-                   f"{pct(spec + major)} of the page-one clicks go {across} "
-                   f"({pct(spec)} and {pct(major)}); {rest}; forum threads, "
-                   f"social posts and off-target pages {pct(weak)}")
-    evidence = {"clicks_by_kind": {k: round(v, 3) for k, v in
-                                   sorted(split.items(), key=lambda kv: -kv[1])},
-                "groups_read": len(read),
-                "buyer_money_read_a_month": round(sum(c.prize for c in read), 2),
-                "most_exposed": {"search": worst.anchor.term,
-                                 "clicks_to_weak_pages": round(
-                                     worst.weak_share, 3),
-                                 "weak_pages": [r["domain"] for r in
-                                                worst.weak_results]}}
-    examples = [f"{c.anchor.term}: {pct(c.weak_share)} to weak pages "
-                f"({money0(c.prize)}/mo)"
-                for c in sorted(read, key=lambda c: -c.weak_share)[:6]]
-    opened = ("People searching to buy here are often answered by pages not "
-              "built for them — forum threads, social posts, off-target pages "
-              "— so a page built for them has room to win.")
-    closed = ("People searching to buy here are answered by businesses built "
-              "to serve them, so a new page has to beat an established one.")
-    return [
-        _claim(graph, "market|weak_open", "weak_open",
-               "Buyers here are often answered by pages not built for them",
-               f"Buyers here are often answered by pages not built for them: "
-               f"{open_text}. Most exposed: “{worst.anchor.term}”, "
-               f"{pct(worst.weak_share)}.",
-               opened, closed, evidence, examples),
-        _claim(graph, "market|weak_closed", "weak_closed",
-               "Buyers here are answered by businesses built for them",
-               f"Buyers here are answered by businesses built for them: "
-               f"{closed_text}.",
-               closed, opened, evidence, examples),
-    ]
+    ranked = sorted(split.items(), key=lambda kv: (-kv[1], kv[0]))
+    (k1, s1), (k2, s2) = ranked[0], ranked[1]
+    if round(s1 * 100) <= round(s2 * 100):
+        return []
+    rest = "; ".join(f"{KIND_WORDS[k]} {pct(v)}" for k, v in ranked[2:]
+                     if round(v * 100) >= 1)
+    text = (f"Buyers here are answered first by {KIND_WORDS[k1]}: they sit "
+            f"where {pct(s1)} of the page-one clicks go across the "
+            f"{n(len(read))} groups of buying searches read, weighted by what "
+            f"each is worth — ahead of {KIND_WORDS[k2]} at {pct(s2)}"
+            + (f"; {rest}" if rest else "") + ".")
+    led = sorted((c for c in read if c.split.get(k1)),
+                 key=lambda c: -c.prize)
+    return [_claim(
+        graph, "market|who_answers", "who_answers",
+        f"Buyers here are answered first by {KIND_WORDS[k1]}",
+        text,
+        f"People shopping here find {KIND_WORDS[k1]} on the first page more "
+        f"than any other kind of page, {ANSWER_MOVES[k1]}.",
+        f"People shopping here find {KIND_WORDS[k2]} on the first page more "
+        f"than any other kind of page, {ANSWER_MOVES[k2]}.",
+        {"clicks_by_kind": {KIND_WORDS[k]: round(v, 3) for k, v in ranked},
+         "ahead": KIND_WORDS[k1], "next": KIND_WORDS[k2],
+         "groups_read": len(read),
+         "buyer_money_read_a_month": round(sum(c.prize for c in read), 2),
+         "frame": ANSWER_FRAMES.get(k1, "")},
+        [f"{c.anchor.term}: {pct(c.split.get(k1, 0))} to {KIND_WORDS[k1]} "
+         f"({money0(c.prize)}/mo)" for c in led[:6]])]
 
 
 def customer_cost(graph: K.Graph) -> list[Claim]:
@@ -882,29 +966,28 @@ def new_demand(graph: K.Graph) -> list[Claim]:
 
     "Barely existed": no month two to three years ago above 10, the
     smallest volume Google reports that is not zero — a property of the
-    source, not a threshold picked here. "Do now": a typical month this
-    year at least as large as the market's typical search. Without that,
-    anything that went from nothing to twenty qualified, and on `cad to
-    bim` the finding was led by `autodesk certified professional revit for
-    architectural design` — a certificate's full name, not a new demand
-    (it-23). The bar is the market's own median, so it moves with the
-    market rather than with a number chosen here.
+    source, not a threshold picked here. And together they have to show
+    at the precision the sentence prints, as a whole percent of the
+    market's searching: on `cad to bim` the finding was sixteen searches
+    drawing 415 a month between them — 0.2% of the market — led by
+    `autodesk certified professional revit for architectural design`, a
+    certificate's full name, not a new demand (it-23).
     """
-    sizes = [k.volume for k in graph.keywords.values() if k.volume > 0]
-    typical = statistics.median(sizes) if sizes else 0
     fresh = []
     for k in graph.keywords.values():
         s = k.trend
         if len(s) < 36 or not K.growth_readable(s):
             continue
         then, now = s[-36:-24], s[-12:]
-        if (max(then) <= 10 and statistics.median(now) > max(then)
-                and statistics.median(now) >= typical):
+        if max(then) <= 10 and statistics.median(now) > max(then):
             fresh.append(k)
     if len(fresh) < 2:
         return []
     fresh.sort(key=lambda k: -statistics.median(k.trend[-12:]))
     vol = sum(statistics.median(k.trend[-12:]) for k in fresh)
+    share = K.share(vol, graph.total_volume)
+    if round(100 * share) < 1:
+        return []
     top = fresh[0]
     year = (top.months[-36][:4] if len(top.months) >= 36 else "three years ago")
     return [_claim(
@@ -912,15 +995,15 @@ def new_demand(graph: K.Graph) -> list[Claim]:
         f"New since {year}: “{top.term}”"
         + (f" and {len(fresh) - 1} more" if len(fresh) > 1 else ""),
         f"New since {year}: {n(len(fresh))} searches here had no month above "
-        f"10 three years ago and now draw about {n(vol)} a month together, "
-        f"led by “{top.term}” "
+        f"10 three years ago and now draw about {n(vol)} a month together — "
+        f"{pct(share)} of the market's searching — led by “{top.term}” "
         f"({n(statistics.median(top.trend[-12:]))} a month).",
         "Part of this market is new: people have started searching for things "
         "here that almost nobody searched for a few years ago.",
         "What people search for here has been the same for years; nothing new "
         "has appeared.",
         {"new_searches": len(fresh), "searches_a_month_now": round(vol),
-         "typical_search_here_a_month": typical,
+         "share_of_the_market": round(share, 3),
          "searches": [f"{k.term} ({n(statistics.median(k.trend[-12:]))}/mo "
                       f"now)" for k in fresh[:10]]},
         [f"{k.term} ({n(statistics.median(k.trend[-12:]))}/mo now, "

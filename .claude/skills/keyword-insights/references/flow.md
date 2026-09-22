@@ -86,7 +86,7 @@ flowchart TB
   CLUST --> QKIND{{"what is each result? specialist ·<br/>household name · directory · article ·<br/>forum or social · off-target"}}:::jev
   QKIND --> SPLIT["clicks split by position;<br/>open value = buyer money × share<br/>on pages not built for it"]:::code
   LABS["Labs difficulty · share of voice"]:::money --> WIN
-  SPLIT --> WIN["where to win: start here · weak spots ·<br/>lead cost by offering · who owns ·<br/>share of search · switching · patterns · new demand"]:::code
+  SPLIT --> WIN["where to win: start here · open door ·<br/>who answers buyers · lead cost by offering ·<br/>who owns · share of search · switching ·<br/>patterns · new demand"]:::code
   GEN --> QADJ{{"fair reading of the measurements?<br/>which of two accounts?<br/>still true with its subject swapped?<br/>guessable from the name alone?<br/>does it change a decision, by a majority?"}}:::jev
   WIN --> QADJ
   QADJ --> KEPT["survivors"]:::code

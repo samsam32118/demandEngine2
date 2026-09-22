@@ -438,14 +438,24 @@ def generate(graph: K.Graph) -> list[Claim]:
         prior = sum(statistics.median(K.weighted_trend(by_topic[t])[-24:-12])
                     for t, _ in trended)
         overall = (recent / prior) if prior else 1.0
-        rising = sorted([x for x in trended if x[1] >= 1.0],
+        # Up, down and the exceptions are all decided on the figure as
+        # printed. Decided on the raw ratio, 0.996 made "this market is
+        # shrinking: … 1.00x the twelve before" the lead finding of the
+        # `cad to bim` report, with every exception rising (it-23).
+        rising = sorted([x for x in trended if round(x[1], 2) > 1.0],
                         key=lambda x: -x[1])
-        falling = sorted([x for x in trended if x[1] < 1.0],
+        falling = sorted([x for x in trended if round(x[1], 2) < 1.0],
                          key=lambda x: x[1])
-        up = overall >= 1.0
+        up = round(overall, 2) > 1.0
         exceptions = (falling if up else rising)[:3]
         years = max((rows[t]["years_of_history"] for t, _ in trended),
                     default=2)
+        # And only when this year's months stand apart from last year's.
+        series = [K.weighted_trend(by_topic[t]) for t, _ in trended]
+        market = [sum(s[-24:][m] for s in series if len(s) >= 24)
+                  for m in range(24)]
+        moved = K.shifted(market[:12], market[12:])
+    if trended and round(overall, 2) != 1.0 and moved:
         add("market|direction",
             f"This market is {'growing' if up else 'shrinking'}: across "
             f"{len(trended)} measured topics the last twelve months ran at "
@@ -551,10 +561,16 @@ def generate(graph: K.Graph) -> list[Claim]:
     # ---- what the search itself will not tell you -----------------------
     unclear = graph.total_volume - graph.certain_volume
     if graph.total_volume > 0 and unclear > 0:
+        # Both sides over the searches placed on the topic. The whole was
+        # the searches whose words *contain* the topic's name — a different
+        # set from the ones placed on it — and "project management software
+        # (121% clear)" went to the judge as a measurement (it-23), the
+        # it-21 mistake of two universes in one share.
+        placed = {t: sum(k.volume for k in graph.keywords.values()
+                         if k.topic == t) for t in ranked[:8]}
         vague = sorted(
-            ((t, K.share(sum(k.volume for k in by_topic[t]),
-                         sum(k.volume for k in graph.keywords.values()
-                             if t in k.term) or 1)) for t in ranked[:8]),
+            ((t, K.share(sum(k.volume for k in by_topic[t]), placed[t]))
+             for t in ranked[:8] if placed[t] > 0),
             key=lambda x: x[1])
         add("market|ambiguity",
             f"{pct(K.share(unclear, graph.total_volume))} of this market's "
@@ -594,7 +610,12 @@ def generate(graph: K.Graph) -> list[Claim]:
         most = max(settled, key=lambda x: (x[1], x[2]))
         least = min(settled, key=lambda x: (x[1], -x[2]))
         all_brands = sorted({e for k in graph.certain for e in k.entities})
-        if most[0] != least[0] and round(most[1], 2) > round(least[1], 2):
+        # "Settled" is a majority of the shoppers naming a company, and
+        # "not" is fewer than half — the same majority every test here is
+        # won by. On the AnswerThePublic space the pair was 3% against 0%,
+        # and "keyword tool is settled" led the report (it-23).
+        if (most[0] != least[0] and round(100 * most[1]) > 50
+                and round(100 * least[1]) < 50):
             add("market|settled",
                 f"\u201c{most[0]}\u201d is settled and "
                 f"\u201c{least[0]}\u201d is not: {pct(most[1])} of the "
@@ -642,6 +663,16 @@ def generate(graph: K.Graph) -> list[Claim]:
         # enough on its own to clear 0.5 there, and still the right
         # evidence to show.
         own_brands = sorted({e for k in by_topic[least[0]] for e in k.entities})
+        # Which of the pair is built is a comparison, so code makes it: the
+        # topic's share buying against the market's own. The account test
+        # was left to choose between them and chose "open ground" at 0.78
+        # for "building information management" — 0% of it buying (it-23).
+        # The pair keeps its mirror as the rival; only one side is said.
+        certain_shop = sum(k.volume for k in graph.certain
+                           if k.job in K.BIDDABLE)
+        market_com = K.share(certain_shop, max(graph.certain_volume, 1))
+        is_open = com > 0 and round(100 * com) >= round(100 * market_com)
+    if len(unbranded) >= 2 and is_open:
         add("market|open",
             f"The open ground is \u201c{least[0]}\u201d: "
             f"{pct(1 - least[1])} of its {n(least[2])} monthly searches name "
@@ -655,8 +686,10 @@ def generate(graph: K.Graph) -> list[Claim]:
             f"buy: there is no one there to sell to.",
             {"topic": least[0], "unbranded_share": round(1 - least[1], 3),
              "commercial_share": round(com, 3),
-             "searches": least[2], "brands_in_topic": own_brands[:10]},
+             "searches": least[2], "brands_in_topic": own_brands[:10],
+             "market_commercial_share": round(market_com, 3)},
             _examples(by_topic[least[0]]), least[0], "open")
+    if len(unbranded) >= 2 and not is_open:
         # The assertion states the conjunction and nothing more. A first
         # draft said "unbranded *because* there is nothing to sell there",
         # and fair-reading killed it on every corpus (0.17-0.48) while the
@@ -679,7 +712,8 @@ def generate(graph: K.Graph) -> list[Claim]:
             f"mind yet.",
             {"topic": least[0], "unbranded_share": round(1 - least[1], 3),
              "commercial_share": round(com, 3),
-             "searches": least[2], "brands_in_topic": own_brands[:10]},
+             "searches": least[2], "brands_in_topic": own_brands[:10],
+             "market_commercial_share": round(market_com, 3)},
             _examples(by_topic[least[0]]), least[0], "empty")
 
     # ---- is the money where the attention is? ---------------------------

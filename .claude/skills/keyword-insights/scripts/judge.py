@@ -765,7 +765,7 @@ class Claim:
 # catch every decision. The guessable test still applies.
 DECISION_SHAPED = frozenset({"start_here", "open_door", "customer_cost",
                              "who_owns",
-                             "who_owns_not", "weak_open", "weak_closed",
+                             "who_owns_not", "who_answers",
                              "share_of_search", "switching", "pattern",
                              "new_demand"})
 
@@ -991,12 +991,12 @@ def adjudicate(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
         # findings labelled Colour, including its first three (it-23).
         p = score.probabilities
         claim.decides = p.get("2", 0.0) + p.get("3", 0.0)
-        claim.inert = (claim.decides < YES
+        claim.inert = (claim.decides <= YES
                        and p.get("0", 0.0) >= p.get("1", 0.0))
-        claim.background = claim.decides < YES and not claim.inert
+        claim.background = claim.decides <= YES and not claim.inert
         # The label is the likelier level on the side the floor chose, so
         # what the reader sees and what decided the verdict are one reading.
-        side = ("3", "2") if claim.decides >= YES else ("1", "0")
+        side = ("3", "2") if claim.decides > YES else ("1", "0")
         claim.stakes_label = score.legend.get(
             max(side, key=lambda k: (p.get(k, 0.0), k)), score.label)
 
@@ -1007,11 +1007,15 @@ def adjudicate(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
         # kept that way, and one of them had been rejected as "the data
         # supports the opposite" the run before: a coin flip, recorded as a
         # finding. Same floor as every other test here.
-        if claim.reads_true < YES:
+        # A majority is more than half. Answers come back to two places, so
+        # a tie prints as 0.50 — and "Start with “seo keyword research
+        # tools”" was kept on a fair reading of 0.50 and an account of 0.50
+        # (it-23): a coin flip on both tests, recorded as a finding.
+        if claim.reads_true <= YES:
             claim.verdict = "misread"
         elif claim.account == "rival":
             claim.verdict = "the data supports the opposite"
-        elif claim.account != "statement" or claim.account_p < YES:
+        elif claim.account != "statement" or claim.account_p <= YES:
             claim.verdict = "the data does not settle it"
         elif claim.swappable >= YES:
             claim.verdict = "would fit any market"

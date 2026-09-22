@@ -87,7 +87,7 @@ which topics break the pattern.
 | `gradient` | the qualifier that raises the click price most, over searches that are narrower than their bare term — searched less than it | does narrowing a search reach a different, dearer searcher? |
 | `start_here` | page-one groups of buying searches that no other group beats on buyer money naming no company, difficulty and first-page weakness at once; Jev picks among them | where should a newcomer start? |
 | `open_door` | the group with the most buyer money naming no company times the share of its page-one clicks on forum, social and off-target pages | where is the first page least defended? |
-| `weak_open` / `weak_closed` | where buyers' page-one clicks go, by kind of page, weighted by position and by each group's money | are buyers answered by pages built for them, or not? A mirror pair, so the account test decides |
+| `who_answers` | where buyers' page-one clicks go, by kind of page, weighted by position and by each group's money; the kind ahead of every other as printed, the runner-up as its rival | what do buyers find first — and so, which practitioner move applies? |
 | `customer_cost` | average buyer click by offering, over Grow and Convert's 4.78% lead rate | what does a customer cost through search, and for which kind of offer? |
 | `who_owns` / `who_owns_not` | Labs share of voice over the buying searches, `www.` merged, sites that sell nothing set apart | does one business take the buyers' clicks? |
 | `share_of_search` | each confirmed brand's share of branded searching, median months a year apart | who is gaining on whom? |

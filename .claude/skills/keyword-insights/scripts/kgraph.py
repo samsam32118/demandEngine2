@@ -318,6 +318,50 @@ def growth_readable(trend: Sequence[int]) -> bool | None:
     return (by_sum >= 1.0) == (by_med >= 1.0)
 
 
+# The conventional 5% level. Not a number chosen for this skill: the one
+# every reader of a significance test already knows how to discount.
+SIGNIFICANCE = 0.05
+
+
+def shifted(before: Sequence[float], after: Sequence[float]) -> bool:
+    """Are these months distinguishable from those, beyond chance?
+
+    A two-sided Mann-Whitney U test, normal approximation with the tie
+    correction — rank-based, so a spiked month moves it no more than any
+    other month above the rest. "This market is shrinking: … 0.99x the
+    twelve before" led the `cad to bim` report; twelve months that sit
+    among the twelve before them are not a direction, however the ratio of
+    their medians rounds (it-23). Each window holds one full seasonal
+    cycle, which widens both and makes the test slower to call a move, not
+    quicker.
+    """
+    a, b = list(before), list(after)
+    n1, n2 = len(a), len(b)
+    if n1 < 2 or n2 < 2:
+        return False
+    pooled = sorted((v, i) for i, v in enumerate(a + b))
+    ranks = [0.0] * (n1 + n2)
+    ties = 0.0
+    i = 0
+    while i < len(pooled):
+        j = i
+        while j + 1 < len(pooled) and pooled[j + 1][0] == pooled[i][0]:
+            j += 1
+        for k in range(i, j + 1):
+            ranks[pooled[k][1]] = (i + j) / 2 + 1
+        t = j - i + 1
+        ties += t ** 3 - t
+        i = j + 1
+    u = sum(ranks[:n1]) - n1 * (n1 + 1) / 2
+    n = n1 + n2
+    var = n1 * n2 / 12 * ((n + 1) - ties / (n * (n - 1)))
+    if var <= 0:
+        return False
+    z = (abs(u - n1 * n2 / 2) - 0.5) / math.sqrt(var)
+    p = math.erfc(max(z, 0.0) / math.sqrt(2))
+    return p < SIGNIFICANCE
+
+
 def years_of_history(trend: Sequence[int]) -> int:
     return len(trend) // 12
 
@@ -644,13 +688,22 @@ class Graph:
             # with one identical 48-month series, because they are one
             # cluster to it; counting each made 43-56% of every market's
             # volume a double count (it-23). One stem apart and the same
-            # fingerprint is the same search.
+            # fingerprint is the same search — and so is any wording at all
+            # when the click price matches to the cent as well: that is how
+            # `bim services` and `building information modeling services`,
+            # `revit price` and `revit software cost`, `bim consultant` and
+            # `bim consulting services` came back, and requiring shared
+            # words left 20% of `cad to bim` counted twice. A price of zero
+            # matches by chance, so it identifies nothing.
             fp = fingerprint(row)
             if fp is not None and term not in self.keywords:
                 mine = stems(term)
+                cpc = round(float(row.get("cpc") or 0.0), 2)
                 twin = next((t for t in by_print.get(fp, [])
-                             if len(stems(t) ^ mine) <= 2
-                             and len(stems(t) & mine) >= len(mine) - 1),
+                             if (len(stems(t) ^ mine) <= 2
+                                 and len(stems(t) & mine) >= len(mine) - 1)
+                             or (cpc > 0 and round(self.keywords[t].cpc, 2)
+                                 == cpc)),
                             None)
                 if twin is not None:
                     self.variants_collapsed += 1
@@ -880,16 +933,17 @@ class Graph:
         iterated a set, so which pair it named on a tie changed between
         runs.
 
-        And it is searched at least as often as the market's typical
-        search. The dearest narrowing is almost always one nobody types —
-        `bim drawing software` at 10 a month — and a price that ten people
-        a month meet is a curiosity, not a second kind of buyer: the
+        And it has to show at the precision the finding prints. The
+        dearest narrowing is almost always one nobody types — `bim drawing
+        software` at 10 a month against 6,600 for `bim software`, printed
+        as "3.7x the price for 0% of the volume" — and a price that ten
+        people a month meet is a curiosity, not a second kind of buyer: the
         critique of the `cad to bim` report named exactly that finding
-        (it-23). The bar is the market's own median, not a number chosen
-        here.
+        (it-23). The market's median search was tried as the bar first, and
+        in a long-tail corpus the median search is itself ten a month. Nor
+        can it sit on the source's floor: 10 is the smallest volume Google
+        reports that is not zero, a bucket rather than a count of people.
         """
-        sizes = [k.volume for k in self.keywords.values() if k.volume > 0]
-        typical = median(sizes) if sizes else 0
         by_topic: dict[str, list[Keyword]] = defaultdict(list)
         for kw in self.certain:
             if kw.topic and kw.topic not in ("", "none"):
@@ -900,8 +954,9 @@ class Graph:
             if not bare or bare.cpc <= 0 or bare.volume <= 0:
                 continue
             for kw in kws:
-                if (kw.term == topic or kw.cpc <= 0 or kw.volume <= 0
-                        or kw.volume >= bare.volume or kw.volume < typical):
+                if (kw.term == topic or kw.cpc <= 0 or kw.volume <= 10
+                        or kw.volume >= bare.volume
+                        or round(100 * kw.volume / bare.volume) < 1):
                     continue
                 lift = kw.cpc / bare.cpc
                 if best is None or lift > best[0]:
