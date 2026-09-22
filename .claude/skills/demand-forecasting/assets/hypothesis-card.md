@@ -11,7 +11,21 @@
 > the WHO (therapists → dentists) and this still read true, it explains
 > nothing about either — sharpen it until it forbids something.}
 
-**Premises** (numbered; every threshold and kill below names the one it tests):
+**Premises** (numbered; every threshold and kill below names the one it tests).
+
+Write one claim per premise, on a line starting `- **X1**: …` — `judge.py
+explain` parses that form, and a premise bundling two claims survives any
+single result, so no experiment can kill it. Run the gate before spending:
+
+```bash
+python3 .claude/skills/demand-forecasting/scripts/judge.py explain \
+    --card {this file} --who "{the WHO}" \
+    --decoys "{2-5 buyers this must NOT fit, comma-separated}" \
+    --out {experiment dir}/explain.json
+```
+
+It must come back **HARD**. SOFT or VARIES means sharpen and re-run — the gate
+is free and the experiment is not.
 
 - **X1**: {e.g. "solo therapists must produce a compliant note after every
   session, and do it in unpaid evening time"}

@@ -1,10 +1,10 @@
 {
   "skill_name": "demand-forecasting",
-  "note": "Live runs spend real API budget (DataForSEO + BrightData, ~$0.50-2.00 per full loop). Confirm credentials and budget before running. Assertions are checkable from the lab directory each run produces.",
+  "note": "Live runs spend real API budget (DataForSEO + BrightData, ~$0.50-2.00 per full loop); Jev judgment is ledgered separately and costs fractions of a cent. Confirm credentials (DATA_FOR_SEO_*, BRIGHTDATA_API_TOKEN, and TYPESAFE_API_KEY or TYPESAFEAI_API_KEY) and budget before running. Assertions are checkable from the lab directory each run produces.",
   "evals": [
     {
       "id": 1,
-      "prompt": "I have a vague startup idea: AI meeting notes. There are a hundred versions of this and I don't know which one to build. Run your demand discovery loop on it \u2014 I want to know which precise variant has real demand, and what it would actually cost me to acquire a customer there. Data budget: $0.55.",
+      "prompt": "I have a vague startup idea: AI meeting notes. There are a hundred versions of this and I don't know which one to build. Run your demand discovery loop on it — I want to know which precise variant has real demand, and what it would actually cost me to acquire a customer there. Data budget: $0.55.",
       "expected_output": "A lab directory research/demand/<slug>/ containing maze.json (10+ nodes with axes and statuses), an append-only notebook.md, pre-registered hypothesis cards with numeric thresholds and kill criteria, banked raw data from at least 2 signal families, cac.py JSON output, and report.md with ranked verdicts, a CAC band and repay table per surviving node, an options menu handing the worth-it decision to the user, assumptions register, dead corridors, spend ledger total under budget, and a numeric go/no-go confirmation test.",
       "files": [],
       "assertions": [
@@ -22,7 +22,12 @@
         "Any VALIDATED claim in report.md cites at least 2 distinct signal families with numbers and geo",
         "Each hypothesis card leads with an explanation section containing numbered premises (X1, X2, ...), and its thresholds/kill criteria reference the premises they test",
         "Any cheap-acquisition claim in report.md compares two measured numbers and includes a persistence explanation (why the gap exists and has not been competed away)",
-        "No fabricated metrics: every volume/CPC/rating number in report.md traces to a banked data file or is labeled as an assumption in the register"
+        "No fabricated metrics: every volume/CPC/rating number in report.md traces to a banked data file or is labeled as an assumption in the register",
+        "maze.json records a state from the machine in scripts/maze.py and a state_history whose transitions are all legal ones (no forced transition without a notebook entry explaining it)",
+        "Each hypothesis card was gated before spending: an explain.json exists in the experiment dir with verdict HARD, a swap test over named decoy buyers, and a per-premise forbids/specificity/single-claim record",
+        "Keyword clusters were judged, not eyeballed: a triage.json exists whose per-node clusters carry an intent probability and an assignment confidence per keyword, and whose unassigned list carries a reason per dropped term",
+        "Every verdict traces to a banked verdict.json in which each pre-registered threshold was compared in code, and any REFUTED verdict records P(demand_absent) at or above the refute floor rather than an instrument-blindness reading",
+        "maze.json carries a jev ledger separate from the instrument budget, and the Jev spend is not counted against the instrument cap"
       ]
     },
     {
@@ -36,12 +41,14 @@
         "Every root node has a measured (not just prior) demand score after the probe phase, recorded via node history",
         "The ledger in maze.json totals under $1.00 and every entry has a note explaining what was bought",
         "The final chat response states whether to proceed to hypothesis/experiment phases and names the specific top nodes with their measured cluster volumes and CPCs",
-        "B2B calibration was applied: volume thresholds were not naively compared against B2C defaults, or the report explicitly notes the B2B adjustment"
+        "B2B calibration was applied: volume thresholds were not naively compared against B2C defaults, or the report explicitly notes the B2B adjustment",
+        "The probe phase used judge.py triage rather than hand-picked keywords: triage.json exists and its dropped/unassigned entries show information-intent queries were excluded with a stated reason",
+        "If Jev was unavailable, the report says so under threats to validity and states that the clusters and review readings were judged by eye"
       ]
     },
     {
       "id": 3,
-      "prompt": "My cofounder and I are stuck between two directions for our AI follow-up assistant: real-estate agents vs wedding photographers. Same product roughly \u2014 it drafts personalized client follow-ups from call/meeting context. Which market has better demand economics? Use your forecasting system and give us the numbers, not vibes. Keep data spend under $0.55.",
+      "prompt": "My cofounder and I are stuck between two directions for our AI follow-up assistant: real-estate agents vs wedding photographers. Same product roughly — it drafts personalized client follow-ups from call/meeting context. Which market has better demand economics? Use your forecasting system and give us the numbers, not vibes. Keep data spend under $0.55.",
       "expected_output": "One lab whose maze contains both directions as sibling branches measured with the same instruments and thresholds, a side-by-side CAC comparison (cluster volume, CPC, CAC band, repay months at observed prices, reachable ceiling per branch), a recommendation with the deciding numbers presented as the user's call plus options, and the confirmation test for the recommended branch.",
       "files": [],
       "assertions": [
@@ -50,7 +57,8 @@
         "The comparison contains no LTV, no LTV:CAC ratio, and no verdict word grading whether either branch's economics are good enough",
         "The recommendation names a favourite or an explicit tie, cites the deciding metric gap numerically, states that the final call is the founders', and offers options they can pick from",
         "Price points for each branch are anchored to observed competitor pricing (P8) named in the assumptions register, not guessed",
-        "A confirmation test with numeric go/no-go is specified for the recommended branch"
+        "A confirmation test with numeric go/no-go is specified for the recommended branch",
+        "Both branches were scored with the same judge.py score run (same weights, same rubric bands), not with two differently-tuned judgements"
       ]
     }
   ]
