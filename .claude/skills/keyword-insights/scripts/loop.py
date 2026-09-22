@@ -263,6 +263,11 @@ class Run:
         expansions, unvetted, led by a 550,000-a-month search for a
         different product. A filter that covers one of two doors is not a
         filter.
+
+        **Then the whole market is checked for a search larger than the
+        rest of it combined** — `drawings`, admitted to `cad to bim` at
+        1.83 million a month because the relevance question reads a word
+        in the market's sense. See `judge.outvoting`.
         """
         if not fresh:
             return []
@@ -277,6 +282,17 @@ class Run:
                      f"{self.args.relevance_cap:,} the cap pays to read — "
                      f"not vetted, so not admitted")
         gone = list(drop) + unread
+        # The whole market, not just this batch: a search is only an
+        # outvoter against everything already admitted, and a batch of
+        # seventeen always has a majority term.
+        leaving = set(gone)
+        admitted = [k for k in self.graph.keywords.values()
+                    if k.term not in leaving]
+        outvoted, st = judge.outvoting(self.client, self.graph, admitted,
+                                       self.args.asker)
+        if st.questions:
+            self.stage(st)
+        gone += outvoted
         if gone:
             self.graph.drop(gone)
         return gone

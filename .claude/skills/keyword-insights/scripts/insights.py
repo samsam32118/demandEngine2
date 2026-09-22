@@ -508,15 +508,43 @@ def generate(graph: K.Graph) -> list[Claim]:
              "cpc": biggest.cpc, "intent": biggest.job},
             _examples([biggest]), biggest.topic or ranked[0], "head")
 
+    # Both shares over the same searches, and the cell named is the one
+    # whose spend runs furthest ahead of its searching.
+    #
+    # Spend used to be divided by the money in *every* keyword — including
+    # the head terms held out because their intent could not be read —
+    # while searching was divided by the readable ones only. Every spend
+    # share came out small, and across every run on disk 43 of 51 of these
+    # claims said "the money is concentrated" over numbers saying the
+    # opposite: `cad to bim` put 27% of the searching against 21% of the
+    # spend. Selection was the other half of it: the cell with the most
+    # money is usually just the biggest cell, whose spend is in proportion
+    # almost by construction. The claim is about money out of proportion,
+    # so it is made only where some cell's share of spend exceeds its
+    # share of searching — a sign, which is arithmetic — and whether the
+    # gap matters is left to the tests.
     cells = graph.cells(min_keywords=1)
-    if cells and total_money > 0:
-        richest = max(cells, key=lambda c: c.money)
+    certain_money = sum(k.money for k in graph.certain)
+    richest = None
+    if cells and certain_money > 0:
+        def excess(c: K.Cell) -> float:
+            return (K.share(c.money, certain_money)
+                    - K.share(c.volume, certain_vol))
+        richest = max(cells, key=lambda c: (excess(c), c.money))
+        # And the gap has to show in the sentence as printed: a cell at
+        # 0.1% of the searching and 0.1% of the spend is "out of
+        # proportion" in the fourth decimal and reads "0% of the searching
+        # but 0% of the spend".
+        if pct(K.share(richest.money, certain_money)) == \
+                pct(K.share(richest.volume, certain_vol)) or excess(richest) <= 0:
+            richest = None
+    if richest is not None:
         label = K.JOB_LABELS.get(richest.job, richest.job)
         add("market|money_seat",
             f"The money is concentrated: people searching "
             f"\u201c{richest.topic}\u201d while {label} are "
             f"{pct(K.share(richest.volume, certain_vol))} of the searching "
-            f"but {pct(K.share(richest.money, total_money))} of all the ad "
+            f"but {pct(K.share(richest.money, certain_money))} of all the ad "
             f"spend these searches imply.",
             f"Advertiser spending in this market is concentrated on one kind "
             f"of searcher, out of proportion to how much they search.",
@@ -526,7 +554,7 @@ def generate(graph: K.Graph) -> list[Claim]:
              "share_of_searching": round(
                  K.share(richest.volume, certain_vol), 3),
              "share_of_implied_spend": round(
-                 K.share(richest.money, total_money), 3)},
+                 K.share(richest.money, certain_money), 3)},
             _examples(richest.keywords), richest.topic, "money_seat")
 
     # ---- is the free route the real competitor? -------------------------
@@ -607,19 +635,12 @@ def generate(graph: K.Graph) -> list[Claim]:
             _examples([kw]), a, "substitute")
 
     # ---- does narrowing the search change who you reach? ----------------
-    best: tuple[float, K.Keyword, K.Keyword, str] | None = None
-    for topic in by_topic:
-        bare = graph.keywords.get(topic)
-        if not bare or bare.cpc <= 0:
-            continue
-        for kw in by_topic[topic]:
-            if kw.term == topic or kw.cpc <= 0 or kw.volume <= 0:
-                continue
-            lift = kw.cpc / bare.cpc
-            if best is None or lift > best[0]:
-                best = (lift, bare, kw, kw.term.replace(topic, "").strip())
+    # A narrowing is searched less than what it narrows; see
+    # `Graph.sharpest_narrowing` for the inverted pair that made this rule.
+    best = graph.sharpest_narrowing()
     if best:
-        lift, bare, kw, facet = best
+        lift, bare, kw = best
+        facet = kw.term.replace(bare.term, "").strip()
         add("market|gradient",
             f"Narrowing the search changes who answers it: "
             f"\u201c{bare.term}\u201d is {n(bare.volume)}/mo at "

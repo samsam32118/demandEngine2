@@ -61,11 +61,11 @@ which topics break the pattern.
 | `settled` / `open` / `empty` | branded share, most vs least, and the share of the least-branded topic that is buying or comparing | where have buyers picked a supplier, and where have they not — and is the unclaimed part unclaimed because it is open, or because there is nothing to sell there? `open` and `empty` are built as a contradicting pair from the same numbers, so the account test decides |
 | `split` | biggest term vs dearest click | is the money where the attention is? |
 | `head` | largest keyword and its job | what is the single biggest thing happening here? |
-| `money_seat` | implied spend by cell vs its share of searching | where is spend concentrated out of proportion? |
+| `money_seat` | the cell whose share of implied spend runs furthest ahead of its share of searching, both over the same readable searches | where is spend concentrated out of proportion? Not made when no cell's spend runs ahead at the precision the sentence prints |
 | `selfserve` | self-serve volume share, and where it peaks | is the competitor a company, or doing without? |
 | `season` | peak month over mean, per topic | is there a season, and where is it sharpest? |
 | `substitute` | keywords naming two topics at once | what is weighed against what? |
-| `gradient` | bare topic vs its dearest qualified form | does narrowing reach a different buyer, or just fewer? |
+| `gradient` | the qualifier that raises the click price most, over searches that are narrower than their bare term — searched less than it | does narrowing a search reach a different, dearer searcher? |
 
 ## Four years of history, for the price of one
 

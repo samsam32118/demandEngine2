@@ -738,6 +738,43 @@ class Graph:
             })
         return sorted(rows, key=lambda r: -r["volume"])
 
+    def sharpest_narrowing(self) -> tuple[float, "Keyword", "Keyword"] | None:
+        """The qualifier that raises the click price most: (lift, bare, narrowed).
+
+        A narrowing is a longer search inside a topic whose bare name is
+        itself a keyword — and it is searched *less* than the search it
+        narrows. One that is searched more is not a narrowing; it is a
+        different cluster that happens to contain the words. On `cad to
+        bim`, `bim building modeling` carries the whole BIM cluster's 5,400
+        a month through Google's close-variant grouping, against 720 for
+        `building modeling`, and the finding read "20.6x the price for 750%
+        of the volume" — a premise its own numbers contradict, and one no
+        judgment could catch, because the test reads the assertion with the
+        digits taken out.
+
+        One definition for both callers: the finding, and the network's
+        evidence. They were two copies of the same loop, and the network's
+        iterated a set, so which pair it named on a tie changed between
+        runs.
+        """
+        by_topic: dict[str, list[Keyword]] = defaultdict(list)
+        for kw in self.certain:
+            if kw.topic and kw.topic not in ("", "none"):
+                by_topic[kw.topic].append(kw)
+        best: tuple[float, Keyword, Keyword] | None = None
+        for topic, kws in by_topic.items():
+            bare = self.keywords.get(topic)
+            if not bare or bare.cpc <= 0 or bare.volume <= 0:
+                continue
+            for kw in kws:
+                if (kw.term == topic or kw.cpc <= 0 or kw.volume <= 0
+                        or kw.volume >= bare.volume):
+                    continue
+                lift = kw.cpc / bare.cpc
+                if best is None or lift > best[0]:
+                    best = (lift, bare, kw)
+        return best
+
     def stats(self) -> dict:
         """Everything the network's observed nodes are evidence about.
 
@@ -756,21 +793,11 @@ class Graph:
         trend = weighted_trend(priced)
         ss = sum(k.volume for k in certain if k.job == "self_serve")
 
-        best_lift = 0.0
-        example = ""
-        for topic in {k.topic for k in certain if k.topic}:
-            bare = self.keywords.get(topic)
-            if not bare or bare.cpc <= 0:
-                continue
-            for kw in certain:
-                if kw.topic != topic or kw.cpc <= 0 or kw.term == topic:
-                    continue
-                lift = kw.cpc / bare.cpc
-                if lift > best_lift:
-                    best_lift = lift
-                    example = (f"\u201c{bare.term}\u201d at "
-                               f"${bare.cpc:.2f} against "
-                               f"\u201c{kw.term}\u201d at ${kw.cpc:.2f}")
+        sharp = self.sharpest_narrowing()
+        best_lift = sharp[0] if sharp else 0.0
+        example = (f"\u201c{sharp[1].term}\u201d at ${sharp[1].cpc:.2f} "
+                   f"against \u201c{sharp[2].term}\u201d at "
+                   f"${sharp[2].cpc:.2f}") if sharp else ""
         return {
             "click_price": round(click_price(priced), 2) if priced else None,
             "max_cpc": round(max((k.cpc for k in priced), default=0.0), 2),

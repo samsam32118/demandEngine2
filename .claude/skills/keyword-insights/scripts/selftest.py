@@ -64,6 +64,30 @@ def fixture() -> K.Graph:
     return g
 
 
+class _StubJev:
+    """Answers each yes/no by rule and records what it was asked."""
+
+    def __init__(self, rule):
+        self.rule, self.asked, self.instructions = rule, [], []
+
+    def ask(self, state, questions):
+        answers = {}
+        for key, q in questions.items():
+            self.asked.append(q.instructions["search"])
+            self.instructions.append(q.instructions)
+            answers[key] = self.rule(q.instructions["search"])
+        return _StubResult(answers)
+
+
+class _StubResult:
+    def __init__(self, answers):
+        self.answers, self.usage = answers, jev.Usage()
+
+    def noul(self, key):
+        verdict = self.answers[key]
+        return type("Answer", (), {"yes": lambda _, threshold=0.5: verdict})()
+
+
 def trended_fixture() -> K.Graph:
     """Two topics with four years of history: one that reads, one that
     cannot. `keyword research` is the series as DataForSEO returns it."""
@@ -450,6 +474,179 @@ def offline() -> None:
           and "keyword research" in shape)
     check("the report says a topic is a reading of this corpus",
           "A topic is what this run made of it" in shape)
+
+    print("relevance")
+    yes, no = judge.RELEVANCE_CRITERIA["true"], judge.RELEVANCE_CRITERIA["false"]
+    check("relevance is not asked from the seller's side",
+          "selling" not in yes and "care" not in yes)
+    check("people doing it themselves or learning are in the market",
+          "do it themselves" in yes and "learn" in yes)
+    check("a second meaning of the same words is a reason to say no",
+          "mean something different" in no)
+    check("the customers' other needs are a reason to say no",
+          "other needs of the same customers" in no)
+    check("the outvoting fact reaches Jev as words, never as numbers",
+          not any(ch.isdigit() for ch in judge.OUTVOTE_MEASURED))
+
+    cad = K.Graph("cad to bim", "United States", "en")
+    def kws(pairs):
+        return [K.Keyword(t, v) for t, v in pairs]
+    market = kws([("drawings", 1830000), ("bim", 22200), ("revit", 20000),
+                  ("bim software", 6600), ("scan to bim", 5400),
+                  ("cad to bim", 2120)])
+    stub = _StubJev(lambda term: term != "drawings")
+    gone, st = judge.outvoting(stub, cad, market, "a founder")
+    check("a search larger than the rest of its market is asked about",
+          stub.asked[:1] == ["drawings"])
+    check("and dropped when most people typing it mean something else",
+          gone == ["drawings"])
+    check("then the check ends: nothing left is a majority",
+          stub.asked == ["drawings"] and st.questions == 1)
+    check("Jev is never handed the volumes",
+          all(not any(ch.isdigit() for ch in str(i.get("measured", "")))
+              and set(i) == {"search", "market", "measured", "question"}
+              for i in stub.instructions))
+    quiet = _StubJev(lambda term: False)
+    gone, st = judge.outvoting(quiet, cad, market[1:], "a founder")
+    check("a market with no majority search costs no question",
+          quiet.asked == [] and gone == [] and st.questions == 0)
+    head = _StubJev(lambda term: True)
+    gone, _ = judge.outvoting(head, K.Graph("sourdough starter"), kws([
+        ("sourdough starter", 100000), ("sourdough starter recipe", 20000),
+        ("feeding sourdough starter", 10000)]), "a baker")
+    check("a market's own head term survives being that large",
+          gone == [] and head.asked == ["sourdough starter"])
+    two = _StubJev(lambda term: False)
+    gone, st = judge.outvoting(two, cad, kws([
+        ("drawings", 1000000), ("3d modeling", 500000), ("bim", 60000),
+        ("revit", 40000)]), "a founder")
+    check("an outvoter behind an outvoter is found too",
+          gone == ["drawings", "3d modeling"] and st.questions == 2)
+    check("and the last two terms are never pitted against each other",
+          "bim" not in two.asked and "revit" not in two.asked)
+    pair = _StubJev(lambda term: False)
+    gone, st = judge.outvoting(pair, cad, kws([("bim", 9000), ("revit", 10)]),
+                               "a founder")
+    check("a comparison that cannot fail is not asked",
+          pair.asked == [] and gone == [] and st.questions == 0)
+
+    print("narrowing")
+    nar = K.Graph("cad to bim", "United States", "en")
+    nar.add_rows([{"term": t, "volume": v, "cpc": c, "competition_index": 20,
+                   "low_bid": c * 0.4, "high_bid": c * 2.0, "trend": [],
+                   "months": [], "source": "expanded"}
+                  for t, v, c in [("building modeling", 720, 1.49),
+                                  ("bim building modeling", 5400, 30.68),
+                                  ("building modeling software", 90, 12.0)]])
+    nar.add_topic("building modeling", confirmed=True)
+    for kw in nar.keywords.values():
+        kw.topic, kw.topic_confidence = "building modeling", 1.0
+        kw.job, kw.job_confidence, kw.job_certain = "compare", 0.9, True
+    sharp = nar.sharpest_narrowing()
+    check("a longer search with more volume than its bare term is not a narrowing",
+          sharp is not None and sharp[2].term == "building modeling software")
+    grad = next((c for c in insights.generate(nar) if c.kind == "gradient"), None)
+    check("the gradient finding never claims more than all of the volume",
+          grad is not None and "750%" not in grad.text
+          and grad.evidence["qualified"]["searches"]
+          < grad.evidence["bare"]["searches"])
+    check("the network is told the same narrowing the finding names",
+          "building modeling software" in nar.stats()["gradient_example"])
+    only_up = K.Graph("cad to bim", "United States", "en")
+    only_up.add_rows([{"term": t, "volume": v, "cpc": c, "competition_index": 20,
+                       "low_bid": 1.0, "high_bid": 2.0, "trend": [], "months": [],
+                       "source": "expanded"}
+                      for t, v, c in [("building modeling", 720, 1.49),
+                                      ("bim building modeling", 5400, 30.68)]])
+    only_up.add_topic("building modeling", confirmed=True)
+    for kw in only_up.keywords.values():
+        kw.topic, kw.topic_confidence = "building modeling", 1.0
+        kw.job, kw.job_confidence, kw.job_certain = "compare", 0.9, True
+    check("with no true narrowing there is no gradient finding",
+          only_up.sharpest_narrowing() is None
+          and not any(c.kind == "gradient" for c in insights.generate(only_up)))
+
+    print("money out of proportion")
+    def market_of(rows_, certain=True):
+        g_ = K.Graph("cad to bim", "United States", "en")
+        g_.add_rows([{"term": t, "volume": v, "cpc": c, "competition_index": 20,
+                      "low_bid": c * 0.4, "high_bid": c * 2.0, "trend": [],
+                      "months": [], "source": "expanded"}
+                     for t, v, c, _, _ in rows_])
+        for t, v, c, topic, job in rows_:
+            if topic:
+                g_.add_topic(topic, confirmed=True)
+            kw = g_.keywords[t]
+            kw.topic, kw.topic_confidence = topic, 1.0
+            kw.job, kw.job_confidence = job, 0.9
+            kw.job_certain = bool(job)
+        return g_
+    ms_graph = market_of([
+        ("bim software", 6600, 13.56, "bim software", "compare"),
+        ("revit", 40500, 7.60, "revit", "learn"),
+        ("bim service providers", 50, 219.43, "bim services", "buy"),
+        ("bim modeling services", 1000, 40.0, "bim services", "buy"),
+        ("bim", 22200, 15.45, "", "")])        # intent unreadable: held out
+    ms = next((c for c in insights.generate(ms_graph) if c.kind == "money_seat"), None)
+    check("the money finding names the cell spend runs furthest ahead in",
+          ms is not None and ms.evidence["cell"] == "bim services / buy")
+    check("not the cell that merely has the most money",
+          ms is not None and not ms.evidence["cell"].startswith("revit"))
+    check("its spend share really is above its search share",
+          ms is not None and ms.evidence["share_of_implied_spend"]
+          > ms.evidence["share_of_searching"])
+    check("both shares are over the same searches — held-out money excluded",
+          ms is not None and abs(ms.evidence["share_of_implied_spend"]
+                                 - round(50971 / 448267, 3)) < 1e-9)
+    flat = market_of([("bim software", 6600, 10.0, "bim software", "compare"),
+                      ("revit", 40500, 10.0, "revit", "learn"),
+                      ("bim services", 1000, 10.0, "bim services", "buy")])
+    check("no claim of concentration where every cell pays in proportion",
+          not any(c.kind == "money_seat" for c in insights.generate(flat)))
+    faint = market_of([("revit", 40000, 10.0, "revit", "learn"),
+                       ("bim software", 60000, 10.0, "bim software", "compare"),
+                       ("bim services", 40, 10.5, "bim services", "buy")])
+    check("nor where the gap would not show in the sentence as printed",
+          not any(c.kind == "money_seat" for c in insights.generate(faint)))
+
+    print("the account test")
+    class _Adj:
+        """Every test passes except the account one, which is a plurality."""
+        def __init__(self, p_statement, p_rival):
+            self.p = {"statement": p_statement, "rival": p_rival,
+                      "neither": round(1 - p_statement - p_rival, 3)}
+        def ask(self, state, questions):
+            p = self.p
+            class R:
+                usage = jev.Usage()
+                def noul(self, key):
+                    v = {"true": 0.9, "swap": 0.1, "obvious": 0.1, "odd": 0.5}
+                    return type("N", (), {"noul": v[key.split(":")[0]]})()
+                def choice(self, key):
+                    return type("C", (), {"choice": max(p, key=p.get),
+                                          "probabilities": p,
+                                          "confidence": 0.5})()
+                def score(self, key):
+                    return type("S", (), {"normalized": 0.7,
+                                          "label": "A choice",
+                                          "probabilities": {"0": 0.1, "1": 0.1,
+                                                            "2": 0.7, "3": 0.1}})()
+            return R()
+    def one_claim():
+        return next(c for c in insights.generate(ms_graph) if c.kind == "money_seat")
+    plural = one_claim()
+    judge.adjudicate(_Adj(0.42, 0.40), ms_graph, [plural], "a founder")
+    check("a plurality on the account test is not support",
+          plural.account == "statement" and not plural.survived()
+          and plural.verdict == "the data does not settle it")
+    major = one_claim()
+    judge.adjudicate(_Adj(0.62, 0.30), ms_graph, [major], "a founder")
+    check("a majority on the account test is",
+          major.survived() and major.verdict == "kept")
+    against = one_claim()
+    judge.adjudicate(_Adj(0.20, 0.70), ms_graph, [against], "a founder")
+    check("and the rival winning still says so",
+          against.verdict == "the data supports the opposite")
 
     print("question shapes")
     try:

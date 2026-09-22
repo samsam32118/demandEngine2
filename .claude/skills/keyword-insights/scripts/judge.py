@@ -244,6 +244,35 @@ def pick_sellers(client: jev.Client, graph: K.Graph,
     return sellers, Stage("pick_sellers", len(questions), result.usage, notes)
 
 
+RELEVANCE_QUESTION = (
+    "Is `search` about the thing the `market` market deals in? Where the "
+    "words could mean more than one thing, take the meaning most people "
+    "typing them intend.")
+RELEVANCE_CRITERIA = {
+    "true": "Yes — the search is about what this market deals in, whatever "
+            "the person wants to do with it: buy it, compare options, learn "
+            "about it, do it themselves, or fix it",
+    "false": "No — the search is about something else: a broader subject "
+             "this market is only a small part of, a neighbouring industry, "
+             "other needs of the same customers, or words that mostly mean "
+             "something different to the people typing them",
+}
+
+# Stated in words because Jev cannot compare numbers. Code did the
+# comparison; this is its result.
+OUTVOTE_MEASURED = ("This one search is typed more often each month than "
+                    "every other search found in this market put together.")
+OUTVOTE_QUESTION = ("Given what was measured, are most of the people typing "
+                    "`search` looking for something in the `market` market?")
+OUTVOTE_CRITERIA = {
+    "true": "Yes — this is the market's own name, or a phrase so central to "
+            "it that its volume is the market's volume",
+    "false": "No — a search this common is mostly people who mean something "
+             "broader or different by it, and this market is a small part "
+             "of it",
+}
+
+
 def keep_relevant(client: jev.Client, graph: K.Graph,
                   keywords: Sequence[K.Keyword], asker: str
                   ) -> tuple[list[str], Stage]:
@@ -265,6 +294,25 @@ def keep_relevant(client: jev.Client, graph: K.Graph,
     a phrase and saying whether it belongs to a named market is a question
     about meaning.
 
+    **The question is about the subject of the search, and nothing else.**
+    It used to say yes to anything "close enough that anyone selling in
+    this market would care", and a seller cares about their customers'
+    whole world: on `cad to bim` it admitted `structural engineering`,
+    `architecture firms`, `3d modeling` and `educational buildings`, and on
+    seven labelled markets it dropped 5 of 36 plainly-foreign terms (14%).
+    Asking instead whether the searcher *wants what the market sells*
+    dropped 94% of them and threw out 14% of the real market with them —
+    `sourdough starter recipe` from sourdough, `keyword search tool` from a
+    keyword tool — because people doing it themselves or learning about it
+    are not buying. What they are doing is the job axis's question, and it
+    already has an answer for them. Asked only whether the search is about
+    what the market deals in, whatever the person wants to do with it:
+    92% of the foreign terms dropped, 96% of the market kept (ledger it-21).
+
+    One kind of intruder no wording of this question catches without
+    collateral damage: a common word with a second meaning, read in the
+    market's sense. That is `outvoting`'s job.
+
     Returns the terms to drop.
     """
     if not keywords:
@@ -273,15 +321,8 @@ def keep_relevant(client: jev.Client, graph: K.Graph,
     for i, kw in enumerate(keywords):
         questions[f"rel:{i}"] = jev.Noul(
             instructions={"search": kw.term, "market": graph.seed,
-                          "question": "Is someone searching `search` looking "
-                                      "for something in the `market` "
-                                      "market?"},
-            criteria={
-                "true": "Yes, or close enough that anyone selling in this "
-                        "market would care about that search",
-                "false": "No, this is about something else — a neighbouring "
-                         "industry, a broader subject, or an unrelated need",
-            })
+                          "question": RELEVANCE_QUESTION},
+            criteria=RELEVANCE_CRITERIA)
     result = client.ask(_market_state(graph, asker), questions)
     drop = [kw.term for i, kw in enumerate(keywords)
             if not result.noul(f"rel:{i}").yes(YES)]
@@ -293,6 +334,77 @@ def keep_relevant(client: jev.Client, graph: K.Graph,
         [f"{len(keywords) - len(drop)} of {len(keywords)} harvested searches "
          f"belong to this market, carrying {kept_volume:,} of "
          f"{total_volume:,} searches ({kept_volume / total_volume:.0%})"])
+
+
+def outvoting(client: jev.Client, graph: K.Graph,
+              admitted: Sequence[K.Keyword], asker: str
+              ) -> tuple[list[str], Stage]:
+    """Drop a search larger than the rest of the market combined, unless
+    most of the people typing it are in this market.
+
+    The relevance question reads a phrase against a market, so a phrase
+    with two meanings gets the market's meaning. `drawings` was admitted to
+    `cad to bim` at 1,830,000 searches a month — 64% of the corpus on its
+    own — because to someone converting CAD files, drawings are the thing
+    they convert. To nearly everyone typing the word, they are pictures.
+    Four rewordings of the relevance question were tried on seven labelled
+    markets; each one that dropped `drawings` also threw out `bim` from a
+    BIM market or `keyword research` from a keyword-research one (it-21).
+
+    What gives it away is scale, and scale is arithmetic, so code finds it:
+    no market's vocabulary is mostly one search unless that search is the
+    market's own name. Code says so in words — Jev is never handed two
+    numbers to compare — and Jev judges whether most of the people typing
+    it could be here. Nineteen cases, three fresh asks each: every one
+    right, every time — `drawings`, `3d modeling`, `nhs`, `coffee` and
+    `flour` out; `sourdough starter`, `crm`, `revit` and `cad to bim` kept.
+
+    There is no constant in the rule. "Larger than the rest combined" is
+    the point where one search outvotes everything else by itself, which is
+    precisely what the relevance gate exists to prevent. Only the largest
+    term can be in that position, so it is the only one asked; if it is
+    kept, nothing smaller can be a majority and the check ends. Across nine
+    markets already run, the rule fires on one search: `drawings`.
+
+    It stops when fewer than two other terms remain, because the larger of
+    two is always the majority and a comparison that cannot fail is not a
+    test — the selftest found that by asking a stub that always said no,
+    and watching it strip the market to nothing.
+    """
+    pool = {k.term: k.volume for k in admitted if k.volume > 0}
+    usage = jev.Usage()
+    drop: list[str] = []
+    notes: list[str] = []
+    asked = 0
+    # The comparison is only a test while it can fail. With one other term
+    # left, the larger of two is always "more than the rest combined", so
+    # the rule would ask about — and could drop — a thin market down to
+    # nothing, one term at a time. It needs at least two others.
+    while len(pool) >= 3:
+        top = max(pool, key=lambda t: (pool[t], t))
+        rest = sum(pool.values()) - pool[top]
+        if pool[top] <= rest:
+            break
+        asked += 1
+        result = client.ask(_market_state(graph, asker), {
+            "outvote": jev.Noul(
+                instructions={"search": top, "market": graph.seed,
+                              "measured": OUTVOTE_MEASURED,
+                              "question": OUTVOTE_QUESTION},
+                criteria=OUTVOTE_CRITERIA)})
+        usage.add(result.usage)
+        if result.noul("outvote").yes(YES):
+            notes.append(f"\u201c{top}\u201d is searched more than the rest "
+                         f"of this market combined, and is its own head "
+                         f"term — kept")
+            break
+        notes.append(f"\u201c{top}\u201d is searched more than the rest of "
+                     f"this market combined ({pool[top]:,} a month), and most "
+                     f"people typing it mean something else — dropped before "
+                     f"it outvotes the market")
+        drop.append(top)
+        del pool[top]
+    return drop, Stage("outvote", asked, usage, notes)
 
 
 # --------------------------------------------------------------------------
@@ -605,12 +717,19 @@ def adjudicate(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
         claim.inert = max(score.probabilities,
                           key=score.probabilities.get) == "0"
 
+        # The account test is won by a majority, not a plurality. Three
+        # options means the top pick can hold 0.42 while the other two
+        # hold 0.58 between them — the model saying this is more likely
+        # not supported than supported. Two claims on `cad to bim` were
+        # kept that way, and one of them had been rejected as "the data
+        # supports the opposite" the run before: a coin flip, recorded as a
+        # finding. Same floor as every other test here.
         if claim.reads_true < YES:
             claim.verdict = "misread"
-        elif claim.account != "statement":
-            claim.verdict = ("the data supports the opposite"
-                             if claim.account == "rival"
-                             else "the data does not settle it")
+        elif claim.account == "rival":
+            claim.verdict = "the data supports the opposite"
+        elif claim.account != "statement" or claim.account_p < YES:
+            claim.verdict = "the data does not settle it"
         elif claim.swappable >= YES:
             claim.verdict = "would fit any market"
         elif claim.obvious >= YES:

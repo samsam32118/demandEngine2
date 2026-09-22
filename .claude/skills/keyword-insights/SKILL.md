@@ -174,17 +174,36 @@ returns almost nothing — `investtech` gave 18 rows, `ambulance software` 25.
 `for-site` expands off what a live business is *about*, and a business that
 has paid to rank is evidence somebody is selling here. **Invented keywords
 are hypotheses; harvested ones are observed commercial vocabulary.** It also
-reaches words no expansion could: `electronic health records software` at
-40,500 a month is the market ambulance software sits inside, and nobody
-would have thought to seed it.
+reaches words no expansion could: harvesting a CAD-to-BIM firm turned up
+`bim service providers` at $219 a click and `revit outsourcing` at $174 —
+the most valuable searches in that market, and nobody would have thought
+to seed them.
 
 **A business is wider than its market, so the harvest is gated.** Harvesting
 Radar Healthcare for `ambulance software` returned 503,680 searches a month
 of which 680 were ambulances; the rest was the whole of UK healthcare. Left
 in, that does not merely add noise — topics are mined by volume, so the
 incumbent's other business outvotes the market's own vocabulary and the
-report ends up about the wrong thing. Every harvested search is asked
-whether it belongs to the market before it is allowed to count.
+report ends up about the wrong thing.
+
+Every search that comes in — from a harvest or a probe — is asked one
+thing: **is it about what this market deals in, whatever the person wants
+to do with it?** Not whether a seller would care about it, which admits
+the customers' whole world (`structural engineering` and `architecture
+firms` into `cad to bim`); and not whether the searcher is buying, which
+throws out everyone learning or doing it themselves (`sourdough starter
+recipe` out of sourdough). What someone wants is the job axis's question.
+Across seven labelled markets the first wording dropped 14% of plainly
+foreign terms, the second 94% while losing 14% of the real market, and
+this one drops 92% while keeping 96% (ledger it-21).
+
+**A common word with a second meaning gets through that question** — read
+against a CAD-to-BIM market, `drawings` means CAD drawings. It was admitted
+at 1,830,000 searches a month, 64% of the corpus on its own. So any search
+larger than the rest of the market combined is asked once more, with that
+fact stated in words, whether most people typing it could be here. The
+rule has no constant in it and, across nine markets already run, fired on
+exactly one search.
 
 **Finding that nobody selling ranks is not a failure.** It is the most
 decisive thing the loop can learn, and it falls through to Google's idea

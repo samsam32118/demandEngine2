@@ -36,11 +36,15 @@ flowchart TB
     FCAST["forecast<br/>what the biddable searches deliver"]:::money
   end
 
-  SITE --> QREL{{"is this search in this market at all?<br/>a business is wider than its market"}}:::jev
+  SITE --> QREL{{"is this search about what<br/>this market deals in?<br/>every door in, not just harvests"}}:::jev
+  EXPAND --> QREL
+  PRICEP --> QREL
   QREL -->|"no, or never asked"| DROPPED["discarded before it can<br/>outvote the market's own words<br/>an unvetted row is not evidence"]:::code
-  QREL -->|"yes"| ROWS
-  EXPAND --> ROWS
-  PRICEP --> ROWS
+  QREL -->|"yes"| OUTV{"larger than the rest<br/>of the market combined?"}:::code
+  OUTV -->|"no"| ROWS
+  OUTV -->|"yes"| QOUT{{"stated in words: do most people<br/>typing it mean this market?"}}:::jev
+  QOUT -->|"yes: its own head term"| ROWS
+  QOUT -->|"no: drawings, 1.83M a month"| DROPPED
   ROWS["rows: volume · click price · bids · 48-month series"]:::code
   ROWS --> ADDR["add_rows<br/>collapse word-order permutations"]:::code
   ADDR --> GRAPH[("keyword graph")]:::code

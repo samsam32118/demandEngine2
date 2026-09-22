@@ -1192,3 +1192,125 @@ script. The skill is single-seed by design and the report is right to be;
 a `pool` over several runs' JSON, computing at the keyword level where
 series are stable, is the feature this campaign actually wanted. Not
 built here — it is a feature, not a defect, and this was a review.
+
+---
+
+## it-21 — `cad to bim`: a gate that asked the seller, and three sentences their numbers contradicted
+
+Effort 5 on `cad to bim` came back with 2,555 keywords carrying 2,878,370
+searches a month, 26% of it with readable intent — and **`drawings` at
+1,830,000 a month, 64% of the corpus by itself**, beside `money drawing`,
+`shell drawing`, `educational buildings`, `3d modeling` and `structural
+engineering`. One finding compared `drawings` ($3.19) with `mechanical
+shop drawings` ($109) as a price gradient inside one market; another's
+"90% trying to understand it" was carried by children's drawing searches.
+
+### The relevance question asked the wrong party
+
+Its yes read *"close enough that anyone selling in this market would
+care"*. A seller cares about their customers' whole world — structural
+engineers and architecture firms are exactly who a CAD-to-BIM firm sells
+to. Wordings were measured against labels written before any answer was
+seen, first on this corpus, then on seven harvested markets (220 terms
+each: top 150 by volume plus 60 sampled):
+
+| wording | foreign terms dropped | real market kept |
+|---|---:|---:|
+| v1 — would a seller care (was) | 5/36 (14%) | 256/260 (98%) |
+| v2 — is the searcher buying | 34/36 (94%) | 224/260 (86%) |
+| v4 — is it about what the market deals in | 31–33/36 | 250–251/260 |
+| **v5 — v4, taking the meaning most people intend** | **33/36 (92%)** | **249/260 (96%)** |
+| v6 — v4 and a separate "same sense?" question | 36/36 | 186/260 (72%) |
+
+v2 is the mirror image of v1's mistake: it throws out
+`sourdough starter recipe` (110,000/mo), `feeding sourdough starter` and
+`keyword search tool`, because people learning or doing it themselves are
+not buying — and what people are doing is the job axis's question, which
+already exists. v3 (not in the table: "do *most* of them want this
+market") kept 4 of 19 core terms on `cad to bim`; v6 shows that framing
+collapses to "most people want exactly the seed" however it is asked.
+
+**No wording that kept the real market dropped `drawings`.** Given a
+CAD-to-BIM market, the word means CAD drawings.
+
+### What gives it away is scale, and scale is arithmetic
+
+A search larger than the rest of the market combined is asked once more,
+with that fact stated in words — Jev is never handed two numbers — whether
+most people typing it could be here. Nineteen cases, three fresh asks
+each, 19/19 every time: `drawings`, `3d modeling`, `nhs`, `coffee`,
+`flour`, `google` out; `sourdough starter`, `crm`, `revit`, `meal prep`,
+`cad to bim` kept. Across nine markets already run the rule fires on one
+search. End to end on the contaminated corpus with the real model: one
+question, `drawings` dropped.
+
+The selftest found the rule's edge by asking a stub that always said no:
+with two terms left, the larger is always "more than the rest", and the
+rule stripped the market to nothing. It now stops when fewer than two
+other terms remain — a comparison that cannot fail is not a test.
+
+### Three templates whose framing their own numbers contradicted
+
+**`gradient`** printed *"20.6x the price for 750% of the volume"*: the
+"narrowed" search, `bim building modeling`, carries the whole BIM
+cluster's 5,400 a month against 720 for `building modeling`. A narrowing
+is now searched less than what it narrows. One of ten past gradient
+claims was inverted. The network computed the same pair in a second copy
+of the loop that iterated a `set`, so its tie-breaking changed between
+runs; both now call `Graph.sharpest_narrowing`.
+
+**`money_seat`** said *"the money is concentrated"* over 27% of the
+searching and 21% of the spend. **43 of 51** instances across every run
+on disk had the premise backwards, at least seven of them kept. Two
+causes: spend was divided by the money in *every* keyword — including
+head terms held out for unreadable intent — while searching was divided
+by the readable ones, so every spend share came out small; and the cell
+chosen was the one with the most money, usually just the biggest. Both
+shares are now over the same searches, the cell named is the one whose
+spend runs furthest ahead of its searching, and the claim is not made
+when no cell's does *at the precision the sentence prints* — "0% of the
+searching but 0% of the spend" was the three cases left after the first
+fix. Regenerated over 60 corpora: built on 54, every premise true.
+
+**The account test was won by plurality.** Two claims on `cad to bim`
+survived with the model at 0.42 and 0.46 for their own side — more
+likely not supported than supported — and the money claim had been
+rejected as "the data supports the opposite" the run before. A coin flip
+was recorded as a finding. It now needs a majority, the same 0.5 floor as
+every other test. About 1% of kept claims in the Jev arm were affected.
+
+### Before and after, same seed, same reader
+
+| | first run | after |
+|---|---:|---:|
+| keywords | 2,555 | 1,529 |
+| searches a month | 2,878,370 | 345,840 |
+| intent readable | 26% | 74% |
+| paid channel (forecast) | $1,084/mo | **$308/mo** |
+
+**The earlier `cad to bim tool` report's $1,126 a month was the same
+defect.** Its largest biddable searches were `revit download`, `revit
+architecture download`, `revit cost` and `structural engineering firms` —
+people getting Autodesk's software or looking for engineers.
+
+| | before | after |
+|---|---:|---:|
+| selftest | 88/88 | **115/115** |
+| evals, jev arm | 18/18 | **18/18** |
+| evals, code arm | 16/18 | **17/18** |
+
+The code arm's gain is `thin-niche/code`, which no longer has a false
+concentration claim to keep.
+
+### Named, not fixed
+
+- `direction` calls 1.01x "growing" and lists 0.98x as "running the
+  other way". Saying *flat* needs a constant or a new judgment question.
+- The seven-market gold set's largest disagreement with v5 is hospital
+  EPR terms on `ambulance software` (`electronic patient record nhs`),
+  which I labelled in-market and v5 does not. Whether a hospital records
+  system is what ambulance software deals in is arguable; the numbers
+  above count it against v5.
+- `selfserve` still says "the competitor is doing without" at any share.
+  At 1% it was withheld by the majority floor this time; the sentence
+  itself leaves the magnitude to judgment.
