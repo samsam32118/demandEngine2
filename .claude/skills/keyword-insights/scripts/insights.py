@@ -53,8 +53,21 @@ def n(value: float) -> str:
     return f"{int(round(value)):,}"
 
 
+# DataForSEO returns Google Ads click prices as bare numbers — the response
+# carries no currency field of any kind. Their documented behaviour is US
+# dollars, but printing a symbol the source never stated is the sort of
+# confidently-wrong number this whole method exists to avoid, so the symbol
+# is settable and the report says where it came from.
+_CURRENCY = "$"
+
+
+def set_currency(symbol: str) -> None:
+    global _CURRENCY
+    _CURRENCY = symbol or "$"
+
+
 def usd(value: float) -> str:
-    return f"${value:,.2f}"
+    return f"{_CURRENCY}{value:,.2f}"
 
 
 def pct(value: float) -> str:

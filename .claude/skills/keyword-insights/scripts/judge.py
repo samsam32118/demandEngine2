@@ -580,7 +580,7 @@ def rank(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
 
 
 def assess_probe(client: jev.Client, graph: K.Graph, question: str,
-                 before: str, after: str, asker: str) -> tuple[bool, Stage]:
+                 after: str, asker: str) -> tuple[bool, Stage]:
     """Did the measurement we just bought answer the question we asked?
 
     This is the backtracking test. A person chasing a hunch knows when the

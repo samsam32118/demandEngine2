@@ -109,7 +109,12 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
     today = _dt.date.today().isoformat()
     seo_led = manifest["dataforseo"]
     jev_led = manifest["jev"]
-    covered = K.share(graph.judged_volume, graph.total_volume)
+    # Two different numbers, and conflating them overstates the report.
+    # `judged` is everything that was asked about; `certain` is the subset
+    # whose intent the words actually resolved. Every finding below is built
+    # on `certain`, so that is the coverage the reader needs.
+    asked = K.share(graph.judged_volume, graph.total_volume)
+    covered = K.share(graph.certain_volume, graph.total_volume)
 
     L: list[str] = []
     L.append(f"# What people actually search around “{graph.seed}”")
@@ -119,9 +124,13 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
     L.append(
         f"{len(graph.keywords):,} keywords measured, carrying "
         f"{n(graph.total_volume)} searches a month. "
-        f"{len(graph.judged):,} of them were placed on two axes — what the "
-        f"search is about, and what the person is trying to do — covering "
-        f"{pct(covered)} of that searching. "
+        f"{len(graph.judged):,} of them — {pct(asked)} of that searching — "
+        f"were put on two axes: what the search is about, and what the "
+        f"person is trying to do. The words resolved the second question "
+        f"for {len(graph.certain):,} of them, **{pct(covered)} of the "
+        f"market's searching**, and everything below is built on that "
+        f"subset alone; the rest is short head terms that do not say what "
+        f"the searcher wants, and are left out rather than guessed at. "
         f"{manifest['claims_generated']} statements the data could support "
         f"were generated and tested; {manifest['claims_kept']} survived.")
     L.append("")
@@ -263,5 +272,13 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
              f"average, not a forecast; click prices are what advertisers "
              f"have been paying, which is evidence that money moves — not a "
              f"quote.")
+    L.append("")
+    L.append(
+        f"**On the currency.** DataForSEO returns click prices as bare "
+        f"numbers — its response carries no currency field — and documents "
+        f"them as US dollars. They are shown here with "
+        f"`{manifest.get('currency', '$')}` on that basis, not because the "
+        f"source said so. If your Google Ads account bills in another "
+        f"currency, convert before budgeting against these figures.")
     L.append("")
     return "\n".join(L)

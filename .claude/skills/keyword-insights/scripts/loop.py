@@ -231,15 +231,14 @@ class Run:
             if i == a.iterations - 1 or not self.open:
                 break
 
-            before = self.picture()
             offer = last_children or self.open
             offer = [t for t in offer if t.key not in self.chased] or self.open
             thread, st = judge.decide(self.client, self.graph, offer,
-                                      before, a.asker)
+                                      self.picture(), a.asker)
             self.stage(st)
             if thread is None:
-                self.say("  STOP     Jev judged the picture sufficient — "
-                         "the remaining calls are not worth making")
+                self.say("  STOP     nothing left worth buying — the "
+                         "remaining budget goes unspent")
                 break
 
             thread.status = "chasing"
@@ -261,8 +260,7 @@ class Run:
             # never has, so every probe read as a dead end.
             returned = self.sample(fresh)
             paid, st = judge.assess_probe(self.client, self.graph,
-                                          thread.question, before,
-                                          returned, a.asker)
+                                          thread.question, returned, a.asker)
             self.stage(st)
             thread.status = "paid_off" if paid else "dead_end"
             last_paid_off = paid
@@ -296,8 +294,11 @@ class Run:
                  f"{self.seo.ledger.line()} · {self.jev_usage.line()}")
 
     def _merge(self, new: list[insights.Thread]) -> list[insights.Thread]:
-        seen = {t.key for t in self.open}
-        return self.open + [t for t in new if t.key not in seen]
+        """The open threads: what is on the table and not yet paid for."""
+        live = [t for t in self.open if t.key not in self.chased]
+        seen = {t.key for t in live}
+        return live + [t for t in new
+                       if t.key not in seen and t.key not in self.chased]
 
     # -- output ----------------------------------------------------------
 
@@ -308,6 +309,7 @@ class Run:
             "language": self.args.language,
             "asker": self.args.asker,
             "arm": self.args.arm,
+            "currency": self.args.currency,
             "iterations_requested": self.args.iterations,
             "seconds": round(time.time() - self.started, 1),
             "dataforseo": self.seo.ledger.as_dict(),
@@ -334,6 +336,7 @@ class Run:
 def cmd_run(args) -> int:
     if args.dry_run:
         return plan(args)
+    insights.set_currency(args.currency)
     run = Run(args)
     try:
         run.go()
@@ -402,6 +405,10 @@ def main(argv=None) -> int:
                         "to them, so this changes what survives")
     r.add_argument("--location", default="United States")
     r.add_argument("--language", default="en")
+    r.add_argument("--currency", default="$",
+                   help="symbol for click prices. DataForSEO returns them "
+                        "unlabelled and documents them as US dollars; set "
+                        "this if your Google Ads account bills otherwise")
     r.add_argument("--max-spend", type=float, default=1.00,
                    help="hard ceiling in USD, checked before each call")
     r.add_argument("--judge-cap", type=int, default=DEFAULT_JUDGE_CAP)
