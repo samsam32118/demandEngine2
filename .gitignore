@@ -1,3 +1,6 @@
 __pycache__/
 *.pyc
 .jev-cache/
+.cache/
+workspace/
+node_modules/
