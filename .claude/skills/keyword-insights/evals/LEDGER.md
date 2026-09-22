@@ -600,3 +600,93 @@ more in every market including the empty one would be finding noise.
 | mean kept_share | 0.32 | 0.26 |
 | selftest | 58 | **65** |
 | suite cost (live) | $0.74 | $0.87 |
+
+---
+
+## it-14 — an audit of every call, and a fix that had to be thrown away
+
+Forty billable calls across this session's runs, $3.60. The audit:
+
+| | |
+|---|---|
+| dead-end probes | **16 of 40 calls — $1.44, bought then discarded** |
+| runs ending on a dead end | 3 of the last 4 |
+| second harvested site | 120 keywords, against the first's 1,542 |
+| forecast | ran last, so a run could spend its budget before reaching it |
+
+Forty per cent of the money went on measurements the loop judged useless
+**after paying for them**.
+
+### The obvious fix was measured, and it was worse
+
+Ask Jev whether a probe is worth buying *before* the money moves: two
+hundredths of a cent against nine cents, so it pays for itself at any
+accuracy above chance. Replayed against all 29 historical probes:
+
+| | |
+|---|---|
+| dead ends caught | 4 of 14 — $0.36 saved |
+| good probes wrongly skipped | 9 of 15 — **$0.81 lost** |
+| **net** | **−$0.45** |
+
+Both questions were aimed at the wrong thing. For a price probe it asked
+"do these read as phrases people actually type?", and the honest answer for
+synthesised combinations is no — which is the *premise* of a price probe,
+not an objection to it. Most guesses miss; the few that land are the value.
+For an expansion it asked whether the seed was a broad category, but the
+dead expansions were on topics from inside the market, which all read as
+categories.
+
+**The information was not in the request.** Reverted.
+
+### What is predictive is the template, and it is measurable
+
+| follow-up | paid off | dead | hit rate |
+|---|---:|---:|---:|
+| `diy`, `money`, `minority`, `growth` | 12 | 0 | **100%** |
+| `outlier` | 2 | 2 | 50% |
+| `adjacent` | 1 | 2 | 33% |
+| `movers` | 1 | 7 | **12%** |
+| `brands` | 0 | 5 | **0%** |
+
+`brands` and `movers`: **13 probes, 1 payoff, $1.17.** That is where the
+waste lives, and it is mechanistic rather than random. `brands` priced
+`<brand> vs / alternative / pricing` combinations, which Google barely
+holds; `movers` expanded on topic fragments already in the corpus.
+
+So the loop now ranks by **expected bits per call** — the network's
+information gain times the measured hit rate of that kind of question. The
+record lives on disk and every run adds to it, so the estimate sharpens
+with use. Every term is computed or observed; none is asserted.
+
+And `brands` was not merely down-weighted, it was **replaced**: the question
+it was asking — what vocabulary are these suppliers built on — is answered
+properly by harvesting that supplier's site, for the same $0.09 and twenty
+times the rows. The worst template became the best mechanism.
+
+### The one constant in the loop, stated as such
+
+A probe must be expected to remove at least **0.01 bits** — a hundredth of a
+yes/no answer — about what the reader came for. This is a chosen number, not
+a measured or structural one, so it is named, stated in units that can be
+argued with, and kept in one place.
+
+It had to become final, too. Declining a probe first fell through to asking
+Jev for a second opinion, which promptly bought one worth **0.0002 expected
+bits**. A floor that can be talked out of is not a floor: the fallback now
+fires only when the network cannot price a question at all, never when it
+has priced it at nearly nothing.
+
+### Sites are bought one at a time
+
+Yields are wildly unequal and unknowable before buying — 1,542 usable
+keywords from one harvest, 120 from the next — so buying two up front spends
+$0.09 on a coin flip. Buy one, gate it for relevance, and buy another only
+if there is still not enough to run the analysis on. That is a question
+about having enough data, not about quality, so code settles it.
+
+### The forecast's money is reserved
+
+It is the one call that answers what the reader came with, and it runs last.
+Its $0.09 is now held back from the probe budget so a run cannot spend
+everything on questions and then be unable to afford the answer.

@@ -63,6 +63,14 @@ DEFAULT_ITERATIONS = 3
 # than implying the whole corpus was read.
 DEFAULT_JUDGE_CAP = 250
 
+# The one floor in the loop that is a chosen number rather than a measured
+# or structural one, so it is stated in units a reader can argue with: a
+# probe must be expected to remove at least a hundredth of a yes/no answer
+# about what the reader came for. Below that, $0.09 buys a rounding error.
+# An earlier version gated on raw bits and duly bought a probe worth 0.0002
+# expected bits, which died.
+MIN_EXPECTED_BITS = 0.01
+
 DEFAULT_ASKER = ("someone deciding whether and how to enter this market, "
                  "who has not worked in it before")
 
@@ -71,10 +79,16 @@ class Run:
     def __init__(self, args) -> None:
         self.args = args
         self.graph = K.Graph(args.keyword, args.location, args.language)
+        # The forecast is the one call that answers what the reader came
+        # with, and it runs last. Reserving its money up front stops a run
+        # spending everything on probes and then being unable to afford the
+        # answer.
+        reserve = 0.0 if args.no_forecast else 0.10
         self.seo = seo.Seo(cache_dir=SEO_CACHE, location=args.location,
                            language=args.language,
-                           max_spend_usd=args.max_spend,
+                           max_spend_usd=max(args.max_spend - reserve, 0.10),
                            offline=args.offline)
+        self.reserve = reserve
         self.client = jev.Client(cache_dir=JEV_CACHE,
                                  use_cache=not args.no_jev_cache)
         self.serp = S.Serp(cache_dir=SERP_CACHE, offline=args.offline)
@@ -198,8 +212,19 @@ class Run:
         if not sellers:
             return 0
 
+        # One site at a time. Yields are wildly unequal and unknowable
+        # before buying — one harvest in this session returned 1,542
+        # usable keywords and the next returned 120 — so buying both up
+        # front spends $0.09 on a coin flip. Buy one, gate it, and only
+        # buy another if there is still not enough to run the analysis on.
+        # That is a question about having enough data, not about quality.
         added = 0
         for site in sellers[:self.args.sites]:
+            if added >= self.args.judge_cap:
+                self.say(f"      . {added:,} on-market keywords is enough to "
+                         f"work with; {len(sellers) - 1} further site(s) "
+                         f"left unbought")
+                break
             try:
                 call = self.seo.site(site.domain)
             except (seo.BudgetExceeded, seo.OfflineMiss, seo.SeoError) as exc:
@@ -207,40 +232,36 @@ class Run:
                 break
             before = set(self.graph.keywords)
             self.graph.add_rows(call.rows)
-            fresh = [t for t in self.graph.keywords if t not in before]
-            volume = sum(self.graph.keywords[t].volume for t in fresh)
+            fresh = [self.graph.keywords[t] for t in self.graph.keywords
+                     if t not in before]
+
+            # A business is wider than its market. Harvesting Radar
+            # Healthcare for `ambulance software` brought in 503,680
+            # searches a month of which 680 were ambulances. Topics are
+            # mined by volume, so left in, the incumbent's other business
+            # outvotes this market's own vocabulary and the report comes
+            # out about the wrong thing.
+            drop: list[str] = []
+            if fresh:
+                candidates = sorted(fresh, key=lambda k: -k.volume)[
+                    :self.args.relevance_cap]
+                drop, stage = judge.keep_relevant(
+                    self.client, self.graph, candidates, self.args.asker)
+                self.stage(stage)
+                if drop:
+                    self.graph.drop(drop)
+
+            kept = [t for t in self.graph.keywords
+                    if self.graph.keywords[t].source == f"site:{site.domain}"]
+            volume = sum(self.graph.keywords[t].volume for t in kept)
             self.graph.sites[site.domain] = K.Site(
                 domain=site.domain, title=site.title, snippet=site.snippet,
-                rank=site.rank, kind=site.kind, harvested=len(fresh),
+                rank=site.rank, kind=site.kind, harvested=len(kept),
                 volume=volume)
-            added += len(fresh)
-            self.say(f"      . {site.domain}: {len(call.rows):,} rows, "
-                     f"{len(fresh):,} new, {volume:,} searches/mo"
+            added += len(kept)
+            self.say(f"      . {site.domain}: {len(call.rows):,} rows -> "
+                     f"{len(kept):,} in this market, {volume:,} searches/mo"
                      f" - ${call.cost_usd:.4f}")
-
-        # A harvest brings in whatever the business is about, which is
-        # usually wider than the market. Topics are mined by volume, so an
-        # unfiltered harvest lets the incumbent's other business outvote
-        # this market's own vocabulary and the report ends up about the
-        # wrong thing.
-        if added:
-            candidates = sorted(
-                (k for k in self.graph.keywords.values()
-                 if k.source.startswith("site:") and k.volume > 0),
-                key=lambda k: -k.volume)[:self.args.relevance_cap]
-            drop, stage = judge.keep_relevant(self.client, self.graph,
-                                              candidates, self.args.asker)
-            self.stage(stage)
-            if drop:
-                gone = self.graph.drop(drop)
-                added -= gone
-                for site in self.graph.sites.values():
-                    site.harvested = sum(
-                        1 for k in self.graph.keywords.values()
-                        if k.source == f"site:{site.domain}")
-                    site.volume = sum(
-                        k.volume for k in self.graph.keywords.values()
-                        if k.source == f"site:{site.domain}")
         return added
 
     # -- ORIENT ----------------------------------------------------------
@@ -300,7 +321,7 @@ class Run:
 
     def choose(self, offer) -> tuple[object, judge.Stage]:
         if not self.net or not offer:
-            return None, judge.Stage("decide:bits", 0, jev.Usage())
+            return None, judge.Stage("decide:unscoreable", 0, jev.Usage())
         targets = list(MN.DECISION)
         scored = []
         for thread in offer:
@@ -309,17 +330,44 @@ class Run:
             bits = (self.net.expected_gain(node, targets, self.evidence)
                     if node else 0.0)
             scored.append((bits, node, thread))
+        # Expected bits *per call*, not bits. A question worth a lot that
+        # usually returns nothing is worth less than a modest one that
+        # always lands, and which is which is a measured fact about each
+        # kind of follow-up rather than anything to judge:
+        #
+        #   diy, money, minority, growth   12 probes, 12 paid off
+        #   movers                          8 probes,  1 paid off
+        #   brands                          5 probes,  0 paid off
+        #
+        # Thirteen `brands` and `movers` probes cost $1.17 and produced one
+        # result. The record is kept on disk and every run adds to it, so
+        # the estimate sharpens with use.
+        scored = [(bits * insights.hit_rate(
+                       t.key.rsplit("->", 1)[-1]), bits, node, t)
+                  for bits, node, t in scored]
+        if not any(node for _, _, node, _ in scored):
+            return None, judge.Stage("decide:unscoreable", 0, jev.Usage(),
+                                     ["no open question maps to anything the "
+                                      "network measures"])
         scored.sort(key=lambda x: -x[0])
-        bits, node, thread = scored[0]
-        if bits <= 1e-6:
+        expected, bits, node, thread = scored[0]
+        if expected < MIN_EXPECTED_BITS:
+            # Deliberately not "unscoreable": the network could price this
+            # and priced it at nearly nothing. Handing that to a model for a
+            # second opinion is how the floor gets talked out of, and an
+            # earlier version duly bought a probe worth 0.0002 bits.
             return None, judge.Stage(
-                "decide:bits", 0, jev.Usage(),
-                ["nothing on the table would settle anything the reader "
-                 "came for"])
+                "decide:too-small", 0, jev.Usage(),
+                [f"the best remaining question is worth {expected:.4f} "
+                 f"expected bits, under the {MIN_EXPECTED_BITS} floor — "
+                 f"$0.09 for a rounding error"])
+        tag = thread.key.rsplit("->", 1)[-1]
         return thread, judge.Stage(
             "decide:bits", 0, jev.Usage(),
             [f"worth {bits:.3f} bits about what the reader came for "
-             f"(via {node})"])
+             f"(via {node}); this kind of question has paid off "
+             f"{insights.hit_rate(tag):.0%} of the time, so "
+             f"{expected:.3f} expected bits for the $0.09"])
 
     def find_claims(self) -> list[judge.Claim]:
         self.say("  DECIDE   testing every claim the data could support")
@@ -393,7 +441,7 @@ class Run:
             # exact where it applies, and it costs no request.
             thread, st = self.choose(offer)
             self.stage(st)
-            if thread is None and st.name == "decide:bits":
+            if thread is None and st.name == "decide:unscoreable":
                 thread, st = judge.decide(self.client, self.graph, offer,
                                           self.picture(), a.asker)
                 self.stage(st)
@@ -403,12 +451,17 @@ class Run:
                 break
 
             thread.status = "chasing"
-            self.chased.add(thread.key)
             self.trail.append(thread)
             self.say(f"  ACT      {thread.question}")
             try:
-                fresh = self.observe(thread.action, thread.payload,
-                                     thread.question)
+                if thread.action == "harvest":
+                    before = set(self.graph.keywords)
+                    self.harvest(thread.payload[0])
+                    fresh = [t for t in self.graph.keywords
+                             if t not in before]
+                else:
+                    fresh = self.observe(thread.action, thread.payload,
+                                         thread.question)
             except (seo.BudgetExceeded, seo.OfflineMiss) as exc:
                 thread.status = "unfunded"
                 thread.note = str(exc)
@@ -424,6 +477,7 @@ class Run:
                                           thread.question, returned, a.asker)
             self.stage(st)
             thread.status = "paid_off" if paid else "dead_end"
+            insights.record_probe(thread.key.rsplit("->", 1)[-1], paid)
             last_paid_off = paid
             if not paid:
                 # Undo the tangent, and drop every other thread that asks
@@ -451,6 +505,8 @@ class Run:
             self.orient(a.iterations)
             kept = self.find_claims()
         if not self.args.no_forecast:
+            # Release the reserve now that the probes have had their turn.
+            self.seo.max_spend_usd += self.reserve
             self.price_the_move()
         kept = [c for c in self.claims if c.survived()]
         self.say(f"\n{len(kept)} finding(s) survived · "

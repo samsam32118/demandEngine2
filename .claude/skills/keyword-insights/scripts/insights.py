@@ -19,6 +19,8 @@ experienced practitioner would pick, and they are exactly what is under test.
 
 from __future__ import annotations
 
+import json
+import os
 from collections import Counter
 from dataclasses import dataclass
 from typing import Sequence
@@ -28,6 +30,63 @@ from judge import Claim
 
 # Google Ads accepts at most 20 seeds per expansion.
 K_MAX_SEEDS = 20
+
+# What each kind of follow-up has actually returned, measured rather than
+# assumed. Seeded from 33 probes across the markets in evals/LEDGER.md and
+# added to on every run, so the estimate sharpens with use.
+#
+# The spread is not subtle. `diy` and `money` price facet combinations
+# against vocabulary the market really uses and land every time; `brands`
+# priced `<brand> vs / pricing` combinations that Google barely holds, and
+# is now superseded by harvesting that brand's site for the same $0.09 and
+# twenty times the rows.
+_SEED_RECORD = {
+    "diy": [5, 0], "money": [5, 0], "minority": [1, 0], "growth": [1, 0],
+    "outlier": [2, 2], "adjacent": [1, 2], "movers": [1, 7],
+    "brands": [0, 5], "vocabulary": [0, 1],
+}
+_RECORD_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    ".cache", "probe_record.json")
+
+
+def _load_record() -> dict[str, list[int]]:
+    try:
+        with open(_RECORD_PATH, encoding="utf-8") as fh:
+            stored = json.load(fh)
+    except (OSError, ValueError):
+        stored = {}
+    record = {k: list(v) for k, v in _SEED_RECORD.items()}
+    for tag, pair in stored.items():
+        if isinstance(pair, list) and len(pair) == 2:
+            record[tag] = pair
+    return record
+
+
+def hit_rate(tag: str) -> float:
+    """How often this kind of follow-up has returned anything usable.
+
+    Laplace-smoothed, so a kind nobody has tried sits at even odds rather
+    than at zero or one — a uniform prior, not a number picked to make the
+    arithmetic come out.
+    """
+    paid, dead = _load_record().get(tag, [0, 0])
+    return (paid + 1) / (paid + dead + 2)
+
+
+def record_probe(tag: str, paid_off: bool) -> None:
+    """Add one observation. The record is the point of keeping it."""
+    record = _load_record()
+    entry = record.setdefault(tag, [0, 0])
+    entry[0 if paid_off else 1] += 1
+    try:
+        os.makedirs(os.path.dirname(_RECORD_PATH), exist_ok=True)
+        tmp = _RECORD_PATH + ".tmp"
+        with open(tmp, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=1, sort_keys=True)
+        os.replace(tmp, _RECORD_PATH)
+    except OSError:
+        pass
 
 # --------------------------------------------------------------------------
 # Control-arm constants. Every one of these is a number someone invented.
@@ -534,9 +593,16 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
         keep = True
         kind = claim.kind
         if kind == "settled":
-            gap = (ev.get("most_branded", {}).get("branded_share", 0)
-                   - ev.get("least_branded", {}).get("branded_share", 0))
-            keep = gap >= C["branded_share_high"]
+            # Was a price probe on `<brand> vs / alternative / pricing`
+            # combinations: 0 payoffs in 5 attempts, $0.45 for nothing.
+            # Google barely holds that vocabulary. Harvesting the brand's
+            # own site costs the same $0.09 and returns its whole footprint
+            # — which is what the question was really asking for.
+            brands = ev.get("brands_found") or []
+            add(claim,
+                f"These searchers already name their suppliers — what is "
+                f"the whole vocabulary those suppliers are built on?",
+                "harvest", brands[:1], "supplier")
         elif kind == "open":
             keep = ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
         elif kind == "direction":

@@ -155,6 +155,7 @@ ALL: dict[str, str] = {**LATENT, **OBSERVED, **DECISION}
 PROBE_INFORMS: dict[str, str] = {
     "resolve": "o_vague",
     "diy": "o_diy",
+    "supplier": "o_brand",
     "brands": "o_brand",
     "vocabulary": "o_brand",
     "money": "o_money",
