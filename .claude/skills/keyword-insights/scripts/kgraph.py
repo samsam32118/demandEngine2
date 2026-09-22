@@ -100,6 +100,42 @@ OFFERING_NOUNS: dict[str, str] = {
     "product": "physical products", "information": "information",
 }
 
+# Who is searching: the fourth axis. Fixed and universal like the others —
+# a firm buying for a project, someone doing the work themselves, someone
+# learning it, someone buying for themselves. A market whose most valuable
+# searches come from firms is a different business from one whose come
+# from students, whatever the searches are about.
+AUDIENCES: dict[str, str] = {
+    "business": "Someone buying for a company or a project at work — a firm, "
+                "a contractor or a team choosing a supplier or a tool",
+    "practitioner": "Someone who does this work themselves and is looking for "
+                    "tools, files or answers to get it done",
+    "learner": "A student, or someone new to the subject, learning what it is "
+               "or how it works",
+    "consumer": "Someone doing or buying something for themselves or their "
+                "home",
+}
+AUDIENCE_NOUNS: dict[str, str] = {
+    "business": "firms buying for work", "practitioner": "people doing the "
+    "work themselves", "learner": "people learning it",
+    "consumer": "people buying for themselves",
+}
+
+# Business potential, the column Ahrefs asks its users to fill in by hand
+# for every keyword: could a business entering here sell to this searcher?
+# Levels cheapest first, as a Jev Score takes them. A search is *sellable*
+# when more than half the weight falls on the two levels that say yes — the
+# same majority every test in this skill is won by.
+POTENTIAL_LEVELS: tuple[str, ...] = (
+    "No — they want a job, a definition, one named company's own product or "
+    "site, or something else no newcomer could sell them",
+    "Barely — they are learning or browsing, and a newcomer could only be "
+    "mentioned in passing",
+    "Yes — a newcomer could sell to them, as one of several answers",
+    "Exactly — what a newcomer here would sell is the answer they are "
+    "looking for",
+)
+
 # The jobs that make a search worth bidding on: someone buying, comparing,
 # or looking for a supplier nearby. The closing forecast is priced on
 # exactly this set, and the "buying or comparing" share in every topic row
@@ -116,18 +152,6 @@ def month_name(label: str) -> str:
         return MONTHS[int(label.split("-")[1]) - 1]
     except (ValueError, IndexError):
         return label
-
-# Modifiers that exist in every English search market. These are never used to
-# classify anything — they are probe candidates, the blind spots a run can pay
-# one call to test. See `probe_candidates`.
-UNIVERSAL_FACETS: tuple[str, ...] = (
-    "pricing", "cost", "free", "cheap", "best", "top", "alternative",
-    "alternatives", "vs", "review", "reviews", "comparison", "how to",
-    "what is", "guide", "tutorial", "template", "examples", "software",
-    "app", "tool", "online", "near me", "for small business", "enterprise",
-    "for teams", "jobs", "salary", "course", "certification", "login",
-    "demo", "trial", "open source", "api", "integration", "automation",
-)
 
 STOPWORDS: frozenset[str] = frozenset("""
 a an the and or of for to in on at by with from is are be was were do does
@@ -183,6 +207,22 @@ class Keyword:
     labs_intent: str = ""
     top10_domain_rank: float | None = None
     top10_referring_domains: float | None = None
+    # The stack rank's own columns. Business potential is Jev's expected
+    # level (0-3; `None` is not yet judged) and `sellable` the majority
+    # reading of it; audience is held out, like the other axes, when no
+    # answer is clearly ahead.
+    potential: float | None = None
+    sellable_p: float = 0.0
+    sellable: bool = False
+    audience: str | None = None
+    audience_confidence: float = 0.0
+    audience_certain: bool = False
+    # Where the graph search found it: 0 for the opening harvests and the
+    # seed's own ideas, n for the n-th expansion of the top of the stack —
+    # and whether it has itself been expanded.
+    depth: int = 0
+    expanded: bool = False
+    rank: int | None = None
 
     @property
     def money(self) -> float:
@@ -196,6 +236,14 @@ class Keyword:
     @property
     def judged(self) -> bool:
         return self.job is not None
+
+
+def tier(kw: "Keyword") -> int:
+    """The stack's tiers: 0 a newcomer could sell to and they are buying,
+    1 a newcomer could sell to, 2 the rest."""
+    if not kw.sellable:
+        return 2
+    return 0 if kw.job_certain and kw.job in BIDDABLE else 1
 
 
 @dataclass
@@ -551,46 +599,6 @@ def mine_entities(keywords: Iterable[Keyword], *, limit: int = 30) -> list[str]:
     return [t for t, _ in weight.most_common(limit * 3)][:limit]
 
 
-# Facets that read naturally in front of a phrase. Which side a modifier
-# goes is irrelevant to the answer — Google normalises word order and
-# returns identical metrics for "garden rooms pricing" and "pricing garden
-# rooms" — but it is not irrelevant to the bill. Emitting both spent half of
-# every thousand-slot probe asking the same question twice.
-PREFIX_FACETS = frozenset({
-    "best", "top", "free", "cheap", "how to", "what is", "open source",
-    "diy", "manual", "bespoke", "enterprise",
-})
-
-
-def probe_candidates(topics: Sequence[str], facets: Sequence[str],
-                     known: set[str], *, limit: int = 1000) -> list[str]:
-    """Topic x facet combinations nobody has measured yet.
-
-    This is the cheapest hypothesis test in the whole method: up to a
-    thousand guesses about what people search, answered for the price of
-    one. Each pair is emitted once — see PREFIX_FACETS — so the slots go to
-    a thousand different questions rather than five hundred asked twice.
-
-    Ordering is deterministic so a repeat run hits the cache.
-    """
-    out: list[str] = []
-    seen: set[str] = set()
-    for topic in topics:
-        for facet in facets:
-            if facet in topic:
-                continue
-            term = (f"{facet} {topic}" if facet in PREFIX_FACETS
-                    else f"{topic} {facet}")
-            term = " ".join(term.split()).lower()
-            if term in known or term in seen:
-                continue
-            seen.add(term)
-            out.append(term)
-            if len(out) >= limit:
-                return out
-    return out
-
-
 # --------------------------------------------------------------------------
 # The graph
 # --------------------------------------------------------------------------
@@ -846,6 +854,58 @@ class Graph:
     @property
     def certain_volume(self) -> int:
         return sum(k.volume for k in self.certain)
+
+    # -- the stack rank ----------------------------------------------------
+
+    def stack(self) -> list["Keyword"]:
+        """Every search in the market, most worth winning first.
+
+        The practitioners' table: every keyword, every column, sorted by
+        what it is worth. Three tiers, the funnel Grow and Convert measured
+        — bottom-of-funnel visitors became leads at 4.78%, top-of-funnel at
+        0.19%: searches a newcomer could sell to (Jev's business potential,
+        by majority) whose intent read as buying, comparing or finding a
+        supplier; then the rest a newcomer could sell to; then everything
+        else. Within a tier, the money in the clicks — searches times click
+        price, what Ahrefs and Semrush call traffic value. Keys, not
+        weights: whether it can be sold to and what the searcher is doing
+        are judgments, what it is worth is arithmetic, and none is traded
+        against another. Money alone put `bim construction`, people learning
+        what BIM is, above `bim services` (it-24). Each keyword carries its
+        place in `rank`.
+        """
+        ranked = sorted((k for k in self.keywords.values() if k.volume > 0),
+                        key=lambda k: (tier(k), -k.money, -k.volume, k.term))
+        for i, kw in enumerate(ranked, 1):
+            kw.rank = i
+        for kw in self.keywords.values():
+            if kw.volume <= 0:
+                kw.rank = None
+        return ranked
+
+    def head(self) -> list["Keyword"]:
+        """The top of the stack: from the top down, the fewest buyers a
+        newcomer could sell to that carry half of all such buyers' money.
+
+        Where the stack is read from. Half is the median of the money, not
+        a cut chosen here: above it is the part of the market worth more
+        than everything below it put together. Buyers only: taken over
+        everything sellable, two searches of people still learning what an
+        as-built is — worth more than every buyer in `cad to bim` together —
+        joined the head, and the stack read "the top is people trying to
+        understand it" (it-24). Those are the stack's next tier, shown as
+        such.
+        """
+        sellable = [k for k in self.stack() if tier(k) == 0 and k.money > 0]
+        total = sum(k.money for k in sellable)
+        out: list[Keyword] = []
+        running = 0.0
+        for kw in sellable:
+            out.append(kw)
+            running += kw.money
+            if running * 2 >= total:
+                break
+        return out
 
     @property
     def market_click_price(self) -> float:

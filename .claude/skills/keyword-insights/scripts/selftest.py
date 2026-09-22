@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import insights
 import jev
+import loop
 import judge
 import kgraph as K
 import market_net as MN
@@ -188,21 +189,6 @@ def offline() -> None:
     check("fragments lose to the specific phrase",
           "crm" not in g.confirmed_topics and
           "crm software" in g.confirmed_topics)
-    known = set(g.keywords)
-    probes = K.probe_candidates(["crm software"], ["migration", "cheap"],
-                                known, limit=9)
-    check("each hypothesis is tested once, not in both word orders",
-          len({tuple(sorted(t.split())) for t in probes}) == len(probes),
-          str(probes))
-    check("prefix facets read the natural way round",
-          "cheap crm software" in probes
-          and "crm software migration" in probes, str(probes))
-    check("probes never re-price what is known",
-          not (set(probes) & known))
-    check("probes are deterministic",
-          probes == K.probe_candidates(["crm software"],
-                                       ["migration", "cheap"], known,
-                                       limit=9))
 
     print("claims")
     claims = insights.generate(g)
@@ -240,20 +226,111 @@ def offline() -> None:
     g.drop(["free crm software", "not a real keyword"])
     check("drop removes what it can", len(g.keywords) == before - 1)
 
-    print("follow-ups")
+    print("the stack rank")
     for c in claims:
         c.verdict = "kept"
-    threads = insights.followups(g, claims)
-    check("surviving claims raise threads", len(threads) > 0)
-    check("no two threads buy the same answer",
-          len({(t.action, tuple(sorted(t.payload))) for t in threads})
-          == len(threads))
-    check("expand respects the 20-seed ceiling",
-          all(len(t.payload) <= seo.MAX_SEEDS
-              for t in threads if t.action == "expand"))
-    check("price respects the 1000-keyword ceiling",
-          all(len(t.payload) <= seo.MAX_PRICED
-              for t in threads if t.action == "price"))
+    stk = K.Graph("cad to bim", "United States", "en")
+    for term, vol, cpc, sell in (("bim modeling services", 390, 71.6, True),
+                                 ("bim services", 590, 30.0, True),
+                                 ("revit outsourcing", 20, 174.5, True),
+                                 ("what is bim", 9900, 2.0, False),
+                                 ("revit price", 1000, 8.6, False),
+                                 ("bim jobs", 0, 3.0, False)):
+        kw = K.Keyword(term, vol, cpc)
+        kw.sellable = sell
+        kw.job, kw.job_certain = ("buy" if sell else "learn"), True
+        stk.keywords[term] = kw
+    ranked = stk.stack()
+    check("the stack puts what a newcomer could sell to first, by the money "
+          "in its clicks", [k.term for k in ranked]
+          == ["bim modeling services", "bim services", "revit outsourcing",
+              "what is bim", "revit price"])
+    check("every search with volume has a place, and none without one",
+          [k.rank for k in ranked] == [1, 2, 3, 4, 5]
+          and stk.keywords["bim jobs"].rank is None)
+    check("the head is the fewest buyers a newcomer could sell to carrying "
+          "half of their money", [k.term for k in stk.head()]
+          == ["bim modeling services"])
+    learner = K.Keyword("as builts", 4400, 24.2)
+    learner.sellable, learner.job, learner.job_certain = True, "learn", True
+    stk.keywords[learner.term] = learner
+    check("a learner worth more than every buyer is the next tier, not the "
+          "head", [k.term for k in stk.head()] == ["bim modeling services"]
+          and stk.stack()[3].term == "as builts")
+    del stk.keywords[learner.term]
+    funnel = K.Graph("cad to bim", "United States", "en")
+    for term, vol, cpc, job in (("bim construction", 1300, 10.6, "learn"),
+                                ("bim services", 590, 20.0, "buy"),
+                                ("bim coordination", 1300, 14.5, "learn"),
+                                ("bim outsourcing", 110, 60.0, "compare")):
+        kw = K.Keyword(term, vol, cpc)
+        kw.sellable, kw.job, kw.job_certain = True, job, True
+        funnel.keywords[term] = kw
+    check("buyers a newcomer could sell to come before learners, whatever "
+          "the learners' money", [k.term for k in funnel.stack()]
+          == ["bim services", "bim outsourcing", "bim coordination",
+              "bim construction"])
+    stk.keywords["bim modeling services"].expanded = True
+    check("the graph search expands the top of the stack not yet explored",
+          [k.term for k in loop.frontier(stk)]
+          == ["bim services", "revit outsourcing"]
+          and len(loop.frontier(stk, limit=1)) == 1)
+    import stackrank
+    top = K.Graph("cad to bim", "United States", "en")
+    for term, vol, cpc, sell, offer, who in (
+            ("bim modeling services", 390, 71.6, True, "service", "business"),
+            ("bim services", 590, 30.0, True, "service", "business"),
+            ("scan to bim services", 290, 29.0, True, "service", "business"),
+            ("bim software", 6600, 1.0, True, "software", "practitioner"),
+            ("revit tutorial", 9900, 1.0, False, "information", "learner"),
+            ("what is bim", 9900, 2.0, False, "information", "learner")):
+        kw = K.Keyword(term, vol, cpc)
+        kw.sellable = sell
+        kw.offering, kw.offering_certain = offer, True
+        kw.audience, kw.audience_certain = who, True
+        kw.job, kw.job_certain = ("buy" if sell else "learn"), True
+        kw.topic = "bim"
+        top.keywords[term] = kw
+    read_off = {c.kind: c for c in stackrank.claims(top)}
+    offer = read_off.get("stack_offering")
+    check("the top of the stack is read for what it holds far more of than "
+          "the market", offer is not None
+          and offer.headline == "The top of the stack is people looking for "
+                                "services"
+          and offer.evidence["share_of_the_top_money"] == 1.0
+          and offer.evidence["share_of_all_searching"] == round(
+              1270 / 27670, 3))
+    check("one reading per column Jev fills, none of what the buyers are "
+          "doing", {"stack_offering", "stack_audience"} <= set(read_off)
+          and "stack_topic" not in read_off and "stack_job" not in read_off)
+    stack_md = report.render(top, [], [], {}, "d")
+    check("the table under the title is the top of the stack",
+          "**The top of the stack**" in stack_md
+          and "| 1 | bim modeling services |" in stack_md
+          and "| 4 | bim software |" in stack_md
+          and "revit tutorial" not in stack_md and "Next:" not in stack_md)
+    asb = K.Keyword("as builts", 4400, 24.2)
+    asb.sellable, asb.job, asb.job_certain = True, "learn", True
+    top.keywords[asb.term] = asb
+    next_md = report.render(top, [], [], {}, "d")
+    check("the next tier is shown as such, and code says how it compares",
+          "Next: people a newcomer could sell to who are not buying yet"
+          in next_md and "more than every buyer above put together"
+          in next_md and "| 5 | as builts |" in next_md)
+    del top.keywords[asb.term]
+    threads = [
+        insights.Thread(key="depth:1", question="What surrounds the top of "
+                        "the stack — “bim modeling services” and 1 more?",
+                        action="expand", payload=["bim modeling services",
+                                                  "bim services"],
+                        depth=1, status="paid_off",
+                        note="120 new searches in this market; 14 of them "
+                             "people a newcomer could sell to"),
+        insights.Thread(key="depth:2", question="What surrounds the top of "
+                        "the stack — “revit outsourcing”?", action="expand",
+                        payload=["revit outsourcing"], depth=2,
+                        status="dead_end", note="nothing a newcomer could sell "
+                                                "to came back")]
 
     print("the forecast")
     agg = seo.normalise_forecast([{"keyword": None, "clicks": 232.31,
@@ -439,8 +516,6 @@ def offline() -> None:
           all(set(MN.PARENTS[o]) <= set(MN.LATENT) for o in MN.OBSERVED))
     check("no decision is a parent of anything",
           all(d not in sum(MN.PARENTS.values(), ()) for d in MN.DECISION))
-    check("every probe tag maps to a real observation",
-          all(v in MN.OBSERVED for v in MN.PROBE_INFORMS.values()))
     check("readings are produced for measurements that exist",
           set(MN.readings({"click_price": 1.0, "growth": 1.1}))
           == {"o_money", "o_up"})
@@ -826,11 +901,16 @@ def offline() -> None:
 
     print("the offering is asked")
     class _AssignJev:
-        """Answers topic, job and offering Choices by rule."""
-        def __init__(self, offers_):
+        """Answers topic, job, offering and audience Choices, and the
+        business-potential Score, by rule."""
+        def __init__(self, offers_, potentials=None):
             self.offers = offers_
+            self.potentials = potentials or [{"3": 0.8, "0": 0.2},
+                                             {"0": 0.9, "1": 0.1}]
+            self.asked = {}
         def ask(self, state, questions):
-            offers_ = self.offers
+            offers_, pots = self.offers, self.potentials
+            self.asked = questions
             class R:
                 usage = jev.Usage()
                 def choice(self, key):
@@ -840,18 +920,42 @@ def offline() -> None:
                         probs = {pick: 0.9, judge.NONE: 0.1}
                     elif kind_ == "job":
                         pick, probs = "learn", {"learn": 0.9, "buy": 0.1}
+                    elif kind_ == "who":
+                        pick = "business" if offers_[int(i)] == "service" \
+                            else judge.NONE
+                        probs = {pick: 0.9, "learner": 0.1}
                     else:
                         pick, probs = judge.NONE, {judge.NONE: 1.0}
                     return type("C", (), {"choice": pick, "probabilities": probs,
                                           "confidence": 0.9})()
+                def score(self, key):
+                    p = pots[int(key.split(":")[1])]
+                    return type("S", (), {
+                        "score": sum(int(k) * v for k, v in p.items()),
+                        "probabilities": p})()
             return R()
     probe_kws = [K.Keyword("bim modeling services", 390, 71.0),
                  K.Keyword("revit login", 900, 1.0)]
-    judge.assign(_AssignJev(["service", judge.NONE]), cad, probe_kws, "a founder")
+    assigner = _AssignJev(["service", judge.NONE])
+    judge.assign(assigner, cad, probe_kws, "a founder")
     check("assign reads the offering beside the topic and the job",
           probe_kws[0].offering == "service" and probe_kws[0].offering_certain)
     check("none of these is kept as no offering, not forced into one",
           probe_kws[1].offering == "" and not probe_kws[1].offering_certain)
+    check("assign reads who is searching, and holds out what does not say",
+          probe_kws[0].audience == "business" and probe_kws[0].audience_certain
+          and probe_kws[1].audience == "" and not probe_kws[1].audience_certain)
+    check("business potential is asked of every keyword, against the market",
+          all(f"potential:{i}" in assigner.asked for i in range(2))
+          and assigner.asked["potential:0"].instructions["market"]
+          == cad.seed)
+    check("sellable is a majority on the two levels that say yes",
+          probe_kws[0].sellable and round(probe_kws[0].potential, 2) == 2.4
+          and not probe_kws[1].sellable)
+    split = [K.Keyword("bim consulting", 320, 22.0)]
+    judge.assign(_AssignJev(["service"], [{"2": 0.25, "3": 0.25, "1": 0.5}]),
+                 cad, split, "a founder")
+    check("and half is not a majority", not split[0].sellable)
 
     print("invented giants")
     giant_market = [

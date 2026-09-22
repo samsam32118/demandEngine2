@@ -18,9 +18,11 @@ What it adds here:
   = 0.31" is what the reader came for; the claims are why.
 * **Queries nobody paid for.** Once the tables exist, any posterior is
   arithmetic.
-* **A principled next probe.** Expected entropy reduction over the thing the
-  reader cares about, computed exactly, replacing a model's guess at how
-  useful a measurement would be.
+* **What a measurement would settle.** Expected entropy reduction over the
+  thing the reader cares about, computed exactly. It chose the loop's
+  probes until the graph search moved onto the stack rank (it-24): the
+  search now goes where the value is, and the network is reported, in
+  `network.json`, for what it concludes.
 * **Still no thresholds.** Code computes the statistics, Jev says what each
   one means for its observed node, and that enters as *virtual evidence* —
   the correct formalism for "0.8 sure this is an expensive market".
@@ -149,27 +151,6 @@ PARENTS: dict[str, tuple[str, ...]] = {
 }
 
 ALL: dict[str, str] = {**LATENT, **OBSERVED, **DECISION}
-
-# Which observed node a probe would most inform. Used to price a probe by
-# what it would actually settle, rather than by a guess at its usefulness.
-PROBE_INFORMS: dict[str, str] = {
-    "resolve": "o_vague",
-    "diy": "o_diy",
-    "supplier": "o_brand",
-    "brands": "o_brand",
-    "vocabulary": "o_brand",
-    "money": "o_money",
-    "premium": "o_money",
-    "intents": "o_vague",
-    "segment": "o_gradient",
-    "minority": "o_spread",
-    "movers": "o_up",
-    "season": "o_up",
-    "rivals": "o_brand",
-    "head": "o_vague",
-    "adjacent": "o_spread",
-    "outlier": "o_spread",
-}
 
 
 def assignments(names: Sequence[str]) -> list[tuple[bool, ...]]:

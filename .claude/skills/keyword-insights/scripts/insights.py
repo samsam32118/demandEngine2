@@ -19,8 +19,6 @@ experienced practitioner would pick, and they are exactly what is under test.
 
 from __future__ import annotations
 
-import json
-import os
 import re
 import statistics
 from collections import Counter
@@ -29,66 +27,6 @@ from typing import Sequence
 
 import kgraph as K
 from judge import Claim
-
-# Google Ads accepts at most 20 seeds per expansion.
-K_MAX_SEEDS = 20
-
-# What each kind of follow-up has actually returned, measured rather than
-# assumed. Seeded from 33 probes across the markets in evals/LEDGER.md and
-# added to on every run, so the estimate sharpens with use.
-#
-# The spread is not subtle. `diy` and `money` price facet combinations
-# against vocabulary the market really uses and land every time; `brands`
-# priced `<brand> vs / pricing` combinations that Google barely holds, and
-# is now superseded by harvesting that brand's site for the same $0.09 and
-# twenty times the rows.
-_SEED_RECORD = {
-    "diy": [5, 0], "money": [5, 0], "minority": [1, 0], "growth": [1, 0],
-    "outlier": [2, 2], "adjacent": [1, 2], "movers": [1, 7],
-    "brands": [0, 5], "vocabulary": [0, 1],
-}
-_RECORD_PATH = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    ".cache", "probe_record.json")
-
-
-def _load_record() -> dict[str, list[int]]:
-    try:
-        with open(_RECORD_PATH, encoding="utf-8") as fh:
-            stored = json.load(fh)
-    except (OSError, ValueError):
-        stored = {}
-    record = {k: list(v) for k, v in _SEED_RECORD.items()}
-    for tag, pair in stored.items():
-        if isinstance(pair, list) and len(pair) == 2:
-            record[tag] = pair
-    return record
-
-
-def hit_rate(tag: str) -> float:
-    """How often this kind of follow-up has returned anything usable.
-
-    Laplace-smoothed, so a kind nobody has tried sits at even odds rather
-    than at zero or one — a uniform prior, not a number picked to make the
-    arithmetic come out.
-    """
-    paid, dead = _load_record().get(tag, [0, 0])
-    return (paid + 1) / (paid + dead + 2)
-
-
-def record_probe(tag: str, paid_off: bool) -> None:
-    """Add one observation. The record is the point of keeping it."""
-    record = _load_record()
-    entry = record.setdefault(tag, [0, 0])
-    entry[0 if paid_off else 1] += 1
-    try:
-        os.makedirs(os.path.dirname(_RECORD_PATH), exist_ok=True)
-        tmp = _RECORD_PATH + ".tmp"
-        with open(tmp, "w", encoding="utf-8") as fh:
-            json.dump(record, fh, indent=1, sort_keys=True)
-        os.replace(tmp, _RECORD_PATH)
-    except OSError:
-        pass
 
 # --------------------------------------------------------------------------
 # Control-arm constants. Every one of these is a number someone invented.
@@ -1042,228 +980,25 @@ def order(claims: Sequence[Claim]) -> list[Claim]:
 
 
 # --------------------------------------------------------------------------
-# Follow-ups: the question each kind of finding raises next
-#
-# This table is the skill's model of curiosity. Every finding leaves
-# something unknown, and for each kind of finding there is one obvious next
-# thing a person would go and check. Writing them down makes the loop
-# behave like an analyst rather than a batch job — and keeps it working with
-# no language model in the loop, because the question is structural even
-# though answering it is not.
-#
-# Which thread gets chased is never decided here. This function only says
-# what *could* be asked; Jev decides what is worth paying for.
+# The trail: each step of the graph search, as it happened
 # --------------------------------------------------------------------------
-
-# Modifiers that probe a specific suspicion, rather than the generic sweep in
-# kgraph.UNIVERSAL_FACETS. Each set is the vocabulary a person would reach for
-# when chasing that particular oddity.
-FACET_SETS: dict[str, tuple[str, ...]] = {
-    "money": ("pricing", "cost", "quote", "buy", "demo", "trial",
-              "for business", "enterprise", "consultant", "agency",
-              "service", "provider", "company", "near me"),
-    "diy": ("free", "template", "diy", "how to", "open source", "excel",
-            "spreadsheet", "manual", "yourself", "checklist", "example",
-            "generator"),
-    "choice": ("vs", "alternative", "alternatives", "best", "top",
-               "comparison", "review", "reviews", "competitors", "like"),
-    "segment": ("for small business", "for enterprise", "for startups",
-                "for nonprofits", "for schools", "for contractors",
-                "for nurses", "for lawyers", "for restaurants",
-                "for landlords", "for freelancers", "for teams"),
-    "season": ("2026", "deals", "sale", "black friday", "christmas",
-               "summer", "winter", "january", "end of year"),
-}
-
 
 @dataclass
 class Thread:
-    """One open line of enquiry: a finding, and the probe it suggests.
-
-    A thread is what a person carries in their head as "I should check
-    that". It has a parent, so the trail can be read back afterwards, and a
-    status, so a run can say honestly what it chased and what it dropped.
-    """
+    """One step of the graph search: which searches were expanded, at what
+    depth, and what came back — kept so a run can say honestly where it
+    went and where the trail went cold."""
 
     key: str
     question: str
-    action: str                     # expand | price | site
-    payload: list[str]
-    origin: str = ""                # key of the claim that raised it
+    action: str                     # expand
+    payload: list[str]              # the searches expanded
+    origin: str = ""
     depth: int = 0
-    status: str = "open"            # open | chasing | paid_off | dead_end
+    status: str = "open"            # chasing | paid_off | dead_end | unfunded
     gain_label: str = ""
     note: str = ""
 
     @property
     def label(self) -> str:
         return self.question
-
-
-def _probe_terms(graph: K.Graph, topic: str, facets: Sequence[str],
-                 known: set[str], limit: int) -> list[str]:
-    """Fill the call.
-
-    A price probe bills the same for one keyword or a thousand, so a probe
-    that tests 26 guesses when it could test 900 has wasted nine tenths of
-    what was paid for. The suspicion that raised the thread goes first —
-    its own topic, crossed with the facets that chase it — and the rest of
-    the market's topics fill the remaining slots behind it.
-    """
-    others = [t for t in graph.confirmed_topics if t != topic]
-    ordered = [topic] + sorted(
-        others, key=lambda t: -sum(k.volume for k in graph.keywords.values()
-                                   if t in k.term))
-    wide = list(facets) + [f for f in K.UNIVERSAL_FACETS if f not in facets]
-    return K.probe_candidates(ordered, wide, known, limit=limit)
-
-
-def followups(graph: K.Graph, claims: Sequence[Claim],
-              depth: int = 0) -> list[Thread]:
-    """The open questions a set of findings leaves behind.
-
-    Only claims that survived adjudication raise threads. Chasing a finding
-    Jev has already rejected would be chasing our own noise.
-    """
-    known = set(graph.keywords)
-    out: list[Thread] = []
-
-    def add(claim: Claim, question: str, action: str, payload: Sequence[str],
-            tag: str) -> None:
-        payload = [p for p in payload if p]
-        if not payload:
-            return
-        out.append(Thread(key=f"{claim.key}->{tag}", question=question,
-                          action=action, payload=list(payload),
-                          origin=claim.key, depth=depth))
-
-    for claim in claims:
-        if not claim.survived():
-            continue
-        topic = claim.topic or graph.seed
-        kind = claim.kind
-        ev = claim.evidence
-
-        if kind == "direction":
-            movers = (ev.get("rising") or []) + (ev.get("falling") or [])
-            seeds = [" ".join(m.split(" ")[:-1]) for m in movers[:4]] or [topic]
-            add(claim,
-                f"Some parts of this market run against the trend — what is "
-                f"inside the ones that do?",
-                "expand", [x for x in seeds if x][:K_MAX_SEEDS], "movers")
-        elif kind == "pricing_axis":
-            add(claim,
-                f"If what someone wants is what prices the click, which "
-                f"wants have not been measured yet?",
-                "price", _probe_terms(
-                    graph, topic,
-                    FACET_SETS["money"] + FACET_SETS["choice"], known, 900),
-                "intents")
-        elif kind == "intent":
-            odd = ev.get("topics_against_the_grain") or []
-            seeds = [o.split(":")[0] for o in odd[:3]] or [topic]
-            add(claim,
-                f"One part of this market wants something different from "
-                f"the rest — what else is in it?",
-                "expand", seeds[:K_MAX_SEEDS], "outlier")
-        elif kind == "ambiguity":
-            # The most valuable probe in the set: the head terms carry the
-            # volume and reveal nothing, and the only way to find out what
-            # is behind them is to price the ways they could be completed.
-            add(claim,
-                f"The biggest terms here do not say what the searcher "
-                f"wants — what do they turn into when people say more?",
-                "price", _probe_terms(
-                    graph, topic,
-                    FACET_SETS["money"] + FACET_SETS["diy"]
-                    + FACET_SETS["choice"], known, 950),
-                "resolve")
-        elif kind == "settled":
-            # Expanding a brand name returns that brand's own keyword
-            # universe — its features, its login, its help pages — none of
-            # which answer what these buyers want. The question is what
-            # people put *next to* the name, so the probe prices the name
-            # against the words of choosing and buying.
-            brands = ev.get("brands_found") or []
-            terms: list[str] = []
-            for brand in brands[:8]:
-                terms += K.probe_candidates(
-                    [brand], list(FACET_SETS["choice"] + FACET_SETS["money"]),
-                    known, limit=120)
-            add(claim,
-                f"These searchers already name their suppliers — are they "
-                f"still choosing between them, or going to the one they "
-                f"picked?",
-                "price", terms[:900], "brands")
-        elif kind == "open":
-            add(claim,
-                f"If nobody owns the words for \u201c{topic}\u201d, what "
-                f"words are people reaching for instead?",
-                "expand", [topic], "vocabulary")
-        elif kind == "split":
-            add(claim,
-                f"Attention and money came apart here — what else carries a "
-                f"price that high?",
-                "price", _probe_terms(graph, topic, FACET_SETS["money"],
-                                      known, 900), "money")
-        elif kind == "head":
-            add(claim,
-                f"This is the biggest single search in the market — what "
-                f"surrounds it?",
-                "expand", [ev.get("term", topic)], "head")
-        elif kind == "money_seat":
-            add(claim,
-                f"The spend is concentrated here — what sits next to it "
-                f"that nobody has measured?",
-                "expand", [topic], "adjacent")
-        elif kind == "selfserve":
-            add(claim,
-                f"People are trying to avoid paying — what exactly are they "
-                f"reaching for instead?",
-                "price", _probe_terms(graph, topic, FACET_SETS["diy"], known,
-                                      900), "diy")
-        elif kind == "season":
-            add(claim,
-                f"The peak is real — does it sit in the buying half of this "
-                f"market or the browsing half?",
-                "price", _probe_terms(
-                    graph, topic,
-                    FACET_SETS["season"] + FACET_SETS["money"], known, 900),
-                "season")
-        elif kind == "substitute":
-            others = [ev.get("example", ""), topic]
-            add(claim,
-                f"If these are one decision, who else is in the comparison "
-                f"set?",
-                "expand", [o for o in others if o][:K_MAX_SEEDS], "rivals")
-        elif kind == "gradient":
-            add(claim,
-                f"Narrowing the search changed the price — does the lift "
-                f"keep going as the audience gets more specific?",
-                "price", _probe_terms(graph, topic, FACET_SETS["segment"],
-                                      known, 900), "segment")
-        elif kind == "offer_money":
-            a = K.OFFERING_NOUNS.get(ev.get("money_is_in", ""), "it")
-            add(claim,
-                f"The money is in {a} — what else do the people looking for "
-                f"{a} search for?",
-                "expand", (ev.get("priciest_terms") or [])[:K_MAX_SEEDS],
-                "offer")
-        elif kind == "topic_growth":
-            add(claim,
-                f"One part of this market is rising while another falls — "
-                f"what is inside each?",
-                "expand", [ev.get("growing", {}).get("topic", ""),
-                           ev.get("falling", {}).get("topic", "")], "movers")
-
-    # De-duplicate: two findings often raise the same question, and paying
-    # twice for one answer is the waste this whole loop exists to avoid.
-    seen: set[tuple[str, str]] = set()
-    unique: list[Thread] = []
-    for thread in out:
-        sig = (thread.action, "|".join(sorted(thread.payload))[:400])
-        if sig in seen:
-            continue
-        seen.add(sig)
-        unique.append(thread)
-    return unique

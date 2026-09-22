@@ -8,6 +8,8 @@
 | **topic** | mined as n-grams from the corpus, confirmed by Jev | whether it names a thing rather than narrowing one |
 | **job** | fixed universal taxonomy, assigned by Jev | what the searcher is trying to do |
 | **offering** | fixed universal taxonomy, assigned by Jev | what kind of answer would satisfy them — a service, software, a physical product, information |
+| **who** | fixed universal taxonomy, assigned by Jev | who is searching — a firm buying for work, someone doing the work themselves, someone learning it, someone buying for themselves |
+| **potential** | a Jev Score, 0 to 3, for every search | Ahrefs' business potential, asked for a newcomer: could a business entering this market sell to them? *Sellable* when more than half the weight is on the two levels that say yes |
 | **brand** | mined as tokens, confirmed by Jev | a company already named in the search |
 
 ## Edges
@@ -162,33 +164,41 @@ share of those clicks sitting on pages not built to answer it (forum,
 social, off-target). See `opportunity.py`, and **Where to win** in
 `SKILL.md` for the families.
 
-## Follow-ups
+## The stack, and the graph search that builds it
 
-Each family has one obvious next question — the table in
-`scripts/insights.py` is the skill's model of curiosity. It says what *could*
-be asked; Jev decides what is worth paying for.
+**The stack** is every search in the market sorted by what it is worth to
+a newcomer, in three tiers — people a newcomer could sell to who are buying,
+comparing or looking for a supplier; the rest a newcomer could sell to;
+everyone else — and by the money in the clicks within each (volume times
+click price). `Graph.stack` sets each keyword's `rank`; `keywords.csv` is
+the stack, every column included. **The head** is the fewest buyers a
+newcomer could sell to, from the top down, that carry half of all such
+buyers' money (`Graph.head`); `stackrank.py` reads what the head holds that
+the market does not, one column at a time. The report shows the top ten
+buyers and the top five of the next tier.
 
-Three shapes of probe:
+**The graph search** builds it best-first. After the opening harvests and
+the seed's own ideas, each unit of effort expands the twenty searches at
+the top of the stack not yet explored (`loop.frontier`) — Google's idea list
+for twenty seeds is one $0.09 call — and what comes back is vetted, grounded
+on page one where it is large enough to matter, placed on every column and
+ranked again. Each search keeps the `depth` at which it was found and
+whether it has been `expanded`. The search stops when effort is spent, or
+when an expansion brings back nothing a newcomer could sell to: the best of
+what is left has gone cold, so what is below it will not be warmer.
 
-- **expand** — up to 20 seeds into Google's own idea list. Finds unknown
-  unknowns. Scales with how broad the seed is.
-- **price** — up to 1000 exact terms in one call. Tests known unknowns:
-  a thousand guesses about what people search, answered for the price of
-  one. Most come back at zero volume, and that is the answer.
-- **site** — every keyword a domain is relevant to. Available but never
-  auto-chosen, because guessing a domain from a brand name bills in full
-  whether or not the guess was right.
-
-Probes are filled to the brim. The suspicion that raised the thread goes
-first; the rest of the market's topics fill the remaining slots behind it.
+It replaced a table of follow-up questions — each kind of finding raising
+one probe, priced by the network's expected entropy reduction — whose price
+probes combined topics with template words and found things like `top
+modelling`, and which went where the network was uncertain rather than
+where the money was (it-24).
 
 ## Reading the trail
 
-The report's trail diagram shows the chase: green nodes answered their
-question and the loop went deeper from them; orange nodes did not, and the
-loop returned to the seed and took a different thread. A dead end also
-discards the keywords it brought in — see `evals/LEDGER.md`, it-3.
-
+`trail.csv` has a row per expansion: the depth, the searches expanded, and
+what came back — how many new searches in this market, how many of them a
+newcomer could sell to, and what their clicks are worth. A step that found
+nothing to sell to ends the search, and says so.
 
 ## The market network
 

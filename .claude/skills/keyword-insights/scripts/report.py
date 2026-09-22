@@ -106,6 +106,7 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim], trail: Sequence,
     L += _paid_line(manifest.get("forecast"))
     L += _money_line((extra or {}).get("opportunities"), folder)
     L.append("")
+    L += _stack_table(graph, folder)
 
     if kept:
         rest = len(claims) - len(kept)
@@ -195,6 +196,61 @@ def _money_line(groups, folder: str) -> list[str]:
             f"with the same pages{kd}{grow}; page one is "
             f"{O.page_one_words(top)}. All {n(len(cands))} groups are in "
             f"`{folder}/opportunities.csv`."]
+
+
+# How many rows of each tier the report shows. The file has every row.
+STACK_ROWS = 10
+NEXT_ROWS = 5
+TIERS = ("a newcomer could sell to, and buying",
+         "a newcomer could sell to", "other")
+
+
+def _stack_table(graph: K.Graph, folder: str) -> list[str]:
+    """The top of the stack rank, as a table: the buyers most worth selling
+    to, then the people a newcomer could sell to who are not buying yet —
+    each row with the columns Jev and DataForSEO filled."""
+    stack = graph.stack()
+    buyers = [k for k in stack if K.tier(k) == 0]
+    others = [k for k in stack if K.tier(k) == 1]
+    if not buyers and not others:
+        return []
+    head = graph.head()
+    bought = sum(k.money for k in buyers)
+    waiting = sum(k.money for k in others)
+
+    def read(value, certain, names):
+        return names.get(value, value) if value and certain else "—"
+
+    def row(kw) -> str:
+        g = K.growth(kw.trend) if K.growth_readable(kw.trend) else None
+        return (f"| {kw.rank} | {kw.term} | {n(kw.volume)} | "
+                f"{money0(kw.money)} | {usd(kw.cpc)} | "
+                f"{'—' if kw.difficulty is None else kw.difficulty} | "
+                f"{'—' if g is None else f'{g:.2f}x'} | "
+                f"{read(kw.job, kw.job_certain, K.JOB_LABELS)} | "
+                f"{read(kw.offering, kw.offering_certain, K.OFFERING_NOUNS)} | "
+                f"{read(kw.audience, kw.audience_certain, K.AUDIENCE_NOUNS)} |")
+    header = ["| # | search | searches/mo | worth/mo | click | difficulty | "
+              "year on year | trying to | wants | who |",
+              "|---:|---|---:|---:|---:|---:|---:|---|---|---|"]
+    rows = ["**The top of the stack** — every search ranked: people a "
+            "newcomer could sell to who are buying first, then the rest a "
+            "newcomer could sell to, then everyone else, each by the money in "
+            f"its clicks. All {n(len(stack))}, every column, are in "
+            f"`{folder}/keywords.csv`.", ""]
+    if buyers:
+        rows += [f"Buyers a newcomer could sell to: {n(len(buyers))} searches "
+                 f"worth {money0(bought)} a month; half of it is in the top "
+                 f"{n(len(head))}.", ""] + header
+        rows += [row(k) for k in buyers[:STACK_ROWS]] + [""]
+    if others:
+        more = (" — more than every buyer above put together"
+                if waiting > bought else "")
+        rows += [f"Next: people a newcomer could sell to who are not buying "
+                 f"yet — {n(len(others))} searches worth {money0(waiting)} a "
+                 f"month{more}.", ""] + header
+        rows += [row(k) for k in others[:NEXT_ROWS]] + [""]
+    return rows
 
 
 def _insight(i: int, claim: judge.Claim, arm: str) -> list[str]:
@@ -328,10 +384,12 @@ def _footer(graph: K.Graph, claims: Sequence[judge.Claim], manifest: dict,
                if r.get("growth") is not None and not r.get("growth_readable")]
     series_rows = sum(len(k.trend) for k in graph.keywords.values())
     files = [
-        ("keywords.csv", "every search measured — volume, click price, bids, "
-         "competition, what it is about, what the person wants, what kind of "
-         "answer, companies named, where it came from, year on year",
-         len(graph.keywords)),
+        ("keywords.csv", "the stack rank: every search, most worth selling "
+         "to first — whether a seller here could sell to it and how surely, "
+         "volume, click price, what it is worth, difficulty, year on year, "
+         "what it is about, what the person is trying to do, what kind of "
+         "answer, who is searching, companies named, where the graph search "
+         "found it", len(graph.keywords)),
         ("offerings.csv", "each kind of answer people want — a service, "
          "software, a product, information — and what it is worth",
          len(graph.offering_rows())),
@@ -425,20 +483,30 @@ def write_data(folder: str, graph: K.Graph, claims: Sequence[judge.Claim],
             json.dump(payload, fh, indent=2, default=str)
         written.append(path)
 
-    keywords = sorted(graph.keywords.values(), key=lambda k: (-k.volume, k.term))
+    # The stack rank: every search, every column, most worth selling to
+    # first. Searches with no volume have no place and come last.
+    stack = graph.stack()
+    placed = {k.term for k in stack}
+    keywords = stack + sorted((k for k in graph.keywords.values()
+                               if k.term not in placed), key=lambda k: k.term)
     table("keywords.csv",
-          ["term", "searches_a_month", "click_price", "low_bid", "high_bid",
-           "competition", "difficulty", "about", "wants", "wants_readable",
-           "answer", "answer_readable", "companies", "source", "year_on_year",
-           "year_on_year_readable", "also_spelled"],
-          [[k.term, k.volume, round(k.cpc, 2), round(k.low_bid, 2),
-            round(k.high_bid, 2),
-            "" if k.competition_index is None else k.competition_index,
+          ["rank", "tier", "term", "sellable", "business_potential",
+           "searches_a_month", "click_price", "worth_a_month", "difficulty",
+           "year_on_year", "year_on_year_readable", "about", "wants",
+           "wants_readable", "answer", "answer_readable", "who",
+           "who_readable", "companies", "low_bid", "high_bid", "competition",
+           "source", "depth", "expanded", "also_spelled"],
+          [["" if k.rank is None else k.rank, TIERS[K.tier(k)], k.term,
+            k.sellable,
+            _round(k.potential, 2), k.volume, round(k.cpc, 2),
+            round(k.money, 2),
             "" if k.difficulty is None else k.difficulty,
+            _round(K.growth(k.trend), 3), K.growth_readable(k.trend),
             k.topic or "", k.job or "", k.job_certain, k.offering or "",
-            k.offering_certain, ";".join(k.entities),
-            k.source, _round(K.growth(k.trend), 3),
-            K.growth_readable(k.trend), ";".join(k.aliases)]
+            k.offering_certain, k.audience or "", k.audience_certain,
+            ";".join(k.entities), round(k.low_bid, 2), round(k.high_bid, 2),
+            "" if k.competition_index is None else k.competition_index,
+            k.source, k.depth, k.expanded, ";".join(k.aliases)]
            for k in keywords])
 
     table("series.csv", ["term", "month", "searches"],

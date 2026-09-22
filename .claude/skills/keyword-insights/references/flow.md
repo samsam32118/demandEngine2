@@ -1,8 +1,8 @@
 # The whole flow
 
 Three views of the same machine. The first is what happens end to end; the
-second is the control loop that decides what to buy; the third is the
-network that turns measurements into an answer.
+second is the graph search that decides what to buy; the third is the
+network, which is reported beside the insights.
 
 Every node is coloured by **who does the work**, because that division is
 the method:
@@ -28,24 +28,24 @@ flowchart TB
   QSELL -->|"a focused seller"| SITE
   QSELL -->|"nobody sells here —<br/>itself the finding"| EXPAND
 
-  subgraph OBS["OBSERVE — the keyword calls"]
+  subgraph OBS["COLLECT — the keyword calls"]
     direction LR
     SITE["for-site<br/>a live business's whole footprint<br/>619 rows where a word gave 31"]:::money
-    EXPAND["expand<br/>Google's idea list for a string<br/>collapses on a niche seed"]:::money
-    PRICEP["price<br/>up to 1000 synthesised guesses<br/>each word order asked once"]:::money
+    EXPAND["expand the seed<br/>Google's idea list for a string<br/>collapses on a niche seed"]:::money
+    EXPANDP["expand the top of the stack<br/>Google's ideas around the twenty<br/>searches worth most not yet explored"]:::money
     FCAST["forecast<br/>what the biddable searches deliver"]:::money
   end
 
   SITE --> QREL{{"is this search about what<br/>this market deals in?<br/>every door in, not just harvests"}}:::jev
   EXPAND --> QREL
-  PRICEP --> QREL
+  EXPANDP --> QREL
   QREL -->|"no, or never asked"| DROPPED["discarded before it can<br/>outvote the market's own words<br/>an unvetted row is not evidence"]:::code
   QREL -->|"yes"| OUTV{"larger than the rest<br/>of the market combined?"}:::code
   OUTV -->|"no"| HEAD
   OUTV -->|"yes"| QOUT{{"stated in words: do most people<br/>typing it mean this market?"}}:::jev
   QOUT -->|"yes: its own head term"| HEAD
   QOUT -->|"no: drawings, 1.83M a month"| DROPPED
-  HEAD{"among the market's largest searches,<br/>or its most valuable buying ones?"}:::code
+  HEAD{"among the market's largest searches,<br/>or the top of the stack?"}:::code
   HEAD -->|"no"| ROWS
   HEAD -->|"yes"| PAGE["page one<br/>$0.002 a search, eight at a time"]:::money
   PAGE --> QGROUND{{"judging by what Google shows,<br/>is this search about this market?"}}:::jev
@@ -65,9 +65,13 @@ flowchart TB
   TOPICS --> CONT
   GRAPH --> QJOB{{"what is this person trying to do?<br/>8 fixed options"}}:::jev
   GRAPH --> QOFF{{"what kind of answer would satisfy them?<br/>service · software · product · information"}}:::jev
+  GRAPH --> QWHO{{"who are they?<br/>firm · practitioner · learner · consumer"}}:::jev
+  GRAPH --> QPOT{{"could a newcomer sell to them?<br/>business potential, 0 to 3"}}:::jev
   QJOB --> DECIS["decisive? winner ≥ 2x runner-up<br/>if not, held out and reported"]:::code
   QOFF --> DECIS
+  QWHO --> DECIS
   QTOPIC --> DECIS
+  QPOT --> SELL["sellable: more than half<br/>the weight on yes"]:::code
   PLACED --> CELLS
   DECIS --> CELLS[("cells: topic × job,<br/>and rows by offering")]:::code
 
@@ -79,10 +83,15 @@ flowchart TB
   QCPT{{"63 CPT rows, one request<br/>cached, so re-inference is free"}}:::jev --> NET
   EVID --> NET[("Bayes net<br/>exact enumeration, 32 states")]:::code
   NET --> VERD["posteriors + attribution:<br/>what moved each conclusion"]:::code
-  NET --> EIG["expected entropy reduction<br/>per open question"]:::code
 
+  DECIS --> STACK
+  SELL --> STACK[("the stack: sellable buyers, then sellable,<br/>then the rest — the money in the clicks within")]:::code
+  STACK -->|"effort left, and the last<br/>step found buyers"| EXPANDP
+  STACK -->|"effort spent, or<br/>the trail went cold"| FCAST
+  STACK --> READSTACK["what the top holds that the market does not:<br/>the fewest searches carrying half the money,<br/>by kind of answer, who, intent, topic"]:::code
+  READSTACK --> QADJ
   CELLS --> GEN["generate every claim the shape permits,<br/>contradictory pairs included, and the contrasts:<br/>the money / growth / open ground is in A, not B.<br/>code checks each premise holds as printed"]:::code
-  PAGE --> CLUST["buying searches grouped by<br/>three shared top-ten results"]:::code
+  PAGE --> CLUST["the top of the stack grouped by<br/>three shared top-ten results"]:::code
   CLUST --> QKIND{{"what is each result? specialist ·<br/>household name · directory · article ·<br/>forum or social · off-target"}}:::jev
   QKIND --> SPLIT["clicks split by position;<br/>open value = buyer money × share<br/>on pages not built for it"]:::code
   LABS["Labs difficulty · share of voice"]:::money --> WIN
@@ -93,24 +102,18 @@ flowchart TB
   KEPT --> QRANK{{"which would change what they do most?<br/>groups of 8, then the winners"}}:::jev
   QRANK --> FIND["ranked findings"]:::code
 
-  KEPT --> FOLLOW["follow-up table:<br/>the question each kind of finding raises"]:::code
-  FOLLOW --> EIG
-  EIG -->|"best question clears<br/>the effort floor, in bits"| PRICEP
-  EIG -->|"nothing left worth buying"| FCAST
-  PRICEP -.-> QASSESS{{"does what came back<br/>bear on the question asked?"}}:::jev
-  QASSESS -->|"yes — go deeper"| GRAPH
-  QASSESS -->|"no"| BACK["discard its rows,<br/>drop that whole class of question"]:::code
-  BACK --> GRAPH
 
   FCAST --> COST["clicks available · what each costs ·<br/>what a budget buys"]:::code
   FIND --> REPORT
   COST --> REPORT
-  REPORT(["insights.md — the insights, most valuable first,<br/>and one line on what paid search can buy"]):::io
+  STACK --> REPORT
+  REPORT(["insights.md — the top of the stack, the insights<br/>most valuable first, and what paid search can buy"]):::io
   VERD --> DATA
   GEN --> DATA
   GRAPH --> DATA
   SPLIT --> DATA
-  DATA(["data/ — keywords · offerings · topics · opportunities ·<br/>page one · share of voice · tested · series · trail ·<br/>network · forecast · run"]):::io
+  STACK --> DATA
+  DATA(["data/ — keywords, the whole stack · offerings · topics ·<br/>opportunities · page one · share of voice · tested ·<br/>series · trail · network · forecast · run"]):::io
 
   classDef money fill:#fdeae1,stroke:#eb6834,stroke-width:1.5px,color:#4a1d0c;
   classDef jev fill:#e4edfb,stroke:#2a78d6,stroke-width:1.5px,color:#10305c;
@@ -120,50 +123,41 @@ flowchart TB
 
 ---
 
-## 2. The control loop
+## 2. The graph search
 
-A person chasing a hunch knows when the trail has gone cold. So does this:
-when a probe's results do not bear on the question it was bought to answer,
-the keywords it brought in are **discarded** and every other question of the
-same kind is dropped. Keeping the tangent would crowd out the next batch of
-judging and drag the market's medians toward a market nobody asked about.
+Best-first over the stack. Every search is placed on every column and
+ranked; the top of the stack not yet explored is expanded — Google's own
+ideas around the twenty searches worth most, one call — and what comes back
+is vetted, grounded, placed and ranked again. It stops when effort is spent
+or when the best of what is left brings back nothing a newcomer could sell
+to. Nothing chooses the next step but the stack itself.
 
 ```mermaid
 stateDiagram-v2
-    [*] --> OBSERVE
-    OBSERVE: OBSERVE
-    OBSERVE: one billable call
-    GROUND: GROUND
-    GROUND: the largest searches, held to page one
-    ORIENT: ORIENT
-    ORIENT: place every search on three axes
-    INFER: INFER
-    INFER: tables cached — re-inference is free
-    DECIDE: DECIDE
-    DECIDE: expected entropy reduction, in bits, against the effort floor
-    ACT: ACT
-    ACT: buy one answer
-    ASSESS: ASSESS
-    ASSESS: does it bear on the question?
-    BACKTRACK: BACKTRACK
-    BACKTRACK: undo the rows, kill the question class
-    WHERE: WHERE
-    WHERE: page one for the buying searches, where to win
+    [*] --> COLLECT
+    COLLECT: COLLECT
+    COLLECT: harvest who ranks · the seed's ideas
+    VET: VET
+    VET: in this market? read against page one for the largest
+    PLACE: PLACE
+    PLACE: every search, every column
+    RANK: RANK
+    RANK: the stack — sellable buyers, sellable, the rest; money within
+    EXPAND: EXPAND
+    EXPAND: the top twenty not yet explored, one call
+    READ: READ
+    READ: page one for the top · where to win · the insights, tested
     PRICE: PRICE
     PRICE: what reaching the buyers costs
     REPORT: REPORT
 
-    OBSERVE --> GROUND
-    GROUND --> ORIENT
-    ORIENT --> INFER
-    INFER --> DECIDE
-    DECIDE --> ACT: a question that clears the effort floor
-    DECIDE --> WHERE: nothing left worth buying
-    WHERE --> PRICE
-    ACT --> ASSESS
-    ASSESS --> ORIENT: paid off, go deeper
-    ASSESS --> BACKTRACK: dead end
-    BACKTRACK --> DECIDE: take a different thread
+    COLLECT --> VET
+    VET --> PLACE
+    PLACE --> RANK
+    RANK --> EXPAND: effort left, and the last step found buyers
+    EXPAND --> VET
+    RANK --> READ: effort spent, or the trail went cold
+    READ --> PRICE
     PRICE --> REPORT
     REPORT --> [*]
 ```

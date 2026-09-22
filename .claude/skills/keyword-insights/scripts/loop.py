@@ -1,24 +1,30 @@
 #!/usr/bin/env python3
-"""keyword-insights — one keyword in, a report of data-backed findings out.
+"""keyword-insights — one keyword and an effort in, insights out.
 
 Nothing in this program writes prose about what it found. Sentences come
-from templates filled with measured numbers; every judgment — what a phrase
-means, whether a statement holds, whether it is surprising, which thread to
-chase, when to stop — comes from Jev. There is no language model in the
-loop, which is what makes a run reproducible and an eval meaningful.
+from templates filled with measured numbers; every judgment — whether a
+search belongs to the market, what it is about, what the person wants, what
+kind of answer and who they are, whether a business here could sell to
+them, whether a statement holds and what it is worth — comes from Jev.
+There is no language model in the loop, which is what makes a run
+reproducible and an eval meaningful.
 
-The loop is shaped like a person working, not like a pipeline:
+It is a graph search, ranked the way practitioners rank keywords:
 
-    OBSERVE     measure something
-    ORIENT      place it: what is this about, what are these people doing
-    DECIDE      Jev: what here is out of line, and what should we ask next
-    ACT         buy exactly one answer
-                then: did that answer the question?
-                  yes -> go deeper, its own follow-ups go on the table
-                  no  -> dead end, back up and take a different thread
+    COLLECT     the businesses ranking for the seed, harvested, and
+                Google's ideas around the seed
+    PLACE       every search gets every column — measured by DataForSEO,
+                judged by Jev
+    RANK        the stack: what a seller here could sell to first, by the
+                money in its clicks, then everything else
+    EXPAND      the top of the stack not yet explored, one call per unit of
+                effort — then place and rank again; stop when the best of
+                what is left brings back nothing a newcomer could sell to
+    READ        page one for the top of the stack, and the insights the
+                ranked table supports, each tested and ranked by value
 
 Usage:
-    loop.py run "crm software" --iterations 3 --for "a founder choosing what to build"
+    loop.py run "crm software" --effort 3 --for "a founder choosing what to build"
     loop.py run "crm software" --dry-run
 """
 
@@ -43,26 +49,15 @@ import report as report_mod
 import seo
 import serp as S
 import opportunity as O
+import stackrank
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 SEO_CACHE = os.path.join(SKILL, ".cache", "dataforseo")
 JEV_CACHE = os.path.join(SKILL, ".cache", "jev")
 
-# Three probes is the smallest run that can do the thing this loop is for:
-# one to see the market, one to chase what looked odd, and one to go
-# somewhere else when that turns out to be a dead end. At two there is no
-# backtrack, so it degenerates into a pipeline. Past four the expansions
-# start returning the same keywords, because Google's idea list for any seed
-# is finite — so more iterations mostly buy confirmation, which is the one
-# thing the method is trying not to pay for.
+# How many times the top of the stack is expanded when no effort says so.
 DEFAULT_ITERATIONS = 3
-
-# How many keywords get placed on the two axes per run. Search volume is
-# extremely top-heavy, so a few hundred keywords carry almost all of a
-# market's searching; the report states the share actually covered rather
-# than implying the whole corpus was read.
-DEFAULT_JUDGE_CAP = 250
 
 # A harvest costs $0.09 whether or not anyone reads it, and vetting one
 # keyword for belonging to this market costs about a hundred-thousandth of
@@ -85,46 +80,33 @@ GROUND_READS = 4
 # --------------------------------------------------------------------------
 # Effort
 #
-# One dial instead of five. Raising the probe count alone grows the corpus
-# without growing the share of it that gets read, so coverage falls — which
-# is what happened when `--iterations` was the only knob. Effort moves
-# everything that has to move together: how many businesses get harvested,
-# how many probes are allowed, how much of the corpus is placed on the two
-# axes, how many claims are tested, and the ceiling on spend.
+# One dial instead of many. Effort is how far the graph search goes: how
+# many ranking businesses get harvested at the start, how many times the
+# top of the stack is expanded (`iterations`, one $0.09 call each, up to
+# twenty seeds), how many first pages are read — the market's largest
+# searches held to what Google shows (`ground`) and the top of the stack
+# read for where someone could win (`pages`), both at $0.002 a page — how
+# many searches Labs is asked the difficulty of, how many statements get
+# tested, and the ceiling on spend.
 #
-# The dial itself is the bits floor. A probe costs $0.09 and buys some
-# expected reduction in uncertainty about what the reader came for, so the
-# only real question is **how small an answer you will pay for**. At effort
-# 1 you buy only large ones; at 5 you buy marginal ones. That also retires
-# the one arbitrary constant this loop had: nobody has to pick 0.01 any
-# more, because it is the caller's choice and it is stated in units they
-# can argue with — hundredths of a yes/no answer.
+# Every search collected is placed: judging one costs about a thousandth of
+# a cent, so the stack is the whole market, not its head.
 #
-# Two page-one knobs, both at $0.002 a page. `ground` is how many of the
-# market's largest searches are held to what Google shows for them; `pages`
-# is how many of its buying searches are read for where someone could win.
-# The ceilings rose with them: at effort 5 the pages are at most $0.52.
-#
-# Effort is a **ceiling, not a target**. The loop already stops when nothing
-# on the table clears the floor, so effort 5 does not mean eight probes; it
-# means up to eight, and the measured hit rates decide. A market with
-# nothing in it costs the same at every setting.
+# Effort is a **ceiling, not a target**. The search stops when the best of
+# what is left on the stack brings back nothing a newcomer could sell to, so
+# effort 5 does not mean eight expansions; it means up to eight. A market
+# with nothing in it costs the same at every setting.
 EFFORT = {
-    1: {"name": "glance", "sites": 1, "iterations": 1, "judge_cap": 150,
-        "max_claims": 60, "bits": 0.05, "max_spend": 0.40,
-        "competition": 150, "ground": 10, "pages": 10},
-    2: {"name": "quick", "sites": 1, "iterations": 2, "judge_cap": 200,
-        "max_claims": 80, "bits": 0.02, "max_spend": 0.60,
-        "competition": 250, "ground": 15, "pages": 20},
-    3: {"name": "normal", "sites": 2, "iterations": 3, "judge_cap": 250,
-        "max_claims": 90, "bits": 0.01, "max_spend": 0.90,
-        "competition": 400, "ground": 25, "pages": 30},
-    4: {"name": "deep", "sites": 3, "iterations": 5, "judge_cap": 400,
-        "max_claims": 120, "bits": 0.005, "max_spend": 1.40,
-        "competition": 550, "ground": 40, "pages": 45},
-    5: {"name": "exhaustive", "sites": 4, "iterations": 8, "judge_cap": 600,
-        "max_claims": 160, "bits": 0.002, "max_spend": 2.20,
-        "competition": 700, "ground": 50, "pages": 60},
+    1: {"name": "glance", "sites": 1, "iterations": 1, "max_claims": 60,
+        "max_spend": 0.40, "competition": 150, "ground": 10, "pages": 10},
+    2: {"name": "quick", "sites": 1, "iterations": 2, "max_claims": 80,
+        "max_spend": 0.60, "competition": 250, "ground": 15, "pages": 20},
+    3: {"name": "normal", "sites": 2, "iterations": 3, "max_claims": 90,
+        "max_spend": 0.90, "competition": 400, "ground": 25, "pages": 30},
+    4: {"name": "deep", "sites": 3, "iterations": 5, "max_claims": 120,
+        "max_spend": 1.40, "competition": 550, "ground": 40, "pages": 45},
+    5: {"name": "exhaustive", "sites": 4, "iterations": 8, "max_claims": 160,
+        "max_spend": 2.20, "competition": 700, "ground": 50, "pages": 60},
 }
 EFFORT_NAMES = {v["name"]: k for k, v in EFFORT.items()}
 DEFAULT_EFFORT = 3
@@ -137,13 +119,17 @@ def _effort_label(level: int) -> str:
 def resolve_effort(args) -> dict:
     """Fill in whatever the caller did not set. Explicit always wins."""
     level = EFFORT[args.effort]
-    for key in ("sites", "iterations", "judge_cap", "max_claims",
-                "max_spend"):
+    for key in ("sites", "iterations", "max_claims", "max_spend"):
         if getattr(args, key, None) is None:
             setattr(args, key, level[key])
-    if getattr(args, "min_bits", None) is None:
-        args.min_bits = level["bits"]
     return level
+
+def frontier(graph: K.Graph, limit: int = seo.MAX_SEEDS) -> list:
+    """The next nodes of the graph search: the top of the stack not yet
+    expanded — searches a seller here could sell to, most valuable first,
+    as many as one expansion takes."""
+    return [k for k in graph.stack() if k.sellable and not k.expanded][:limit]
+
 
 DEFAULT_ASKER = ("someone deciding whether and how to enter this market, "
                  "who has not worked in it before")
@@ -175,9 +161,6 @@ class Run:
         self.share_of_voice: list = []
         self.stages: list[judge.Stage] = []
         self.trail: list[insights.Thread] = []
-        self.open: list[insights.Thread] = []
-        self.chased: set[str] = set()
-        self.dead_tags: set[str] = set()
         self.claims: list[judge.Claim] = []
         self.net: MN.Net | None = None
         self.evidence: dict[str, float] = {}
@@ -208,35 +191,6 @@ class Run:
         for st in self.stages:
             total.add(st.usage)
         return total
-
-    def sample(self, terms: list[str], limit: int = 25) -> str:
-        """What a probe actually brought back, biggest searches first."""
-        rows = [self.graph.keywords[t] for t in terms
-                if t in self.graph.keywords]
-        rows.sort(key=lambda k: -k.volume)
-        if not rows:
-            return "nothing: none of the searches tested have any volume"
-        return "\n".join(f"{k.term} — {k.volume:,}/mo, ${k.cpc:.2f} a click"
-                          for k in rows[:limit])
-
-    def picture(self) -> str:
-        """A compact rendering of what is known, for Jev to decide against.
-
-        Kept small on purpose: accuracy falls as irrelevant state grows, so
-        this is the headline shape of the market and nothing else.
-        """
-        rows = self.graph.topic_rows()[:8]
-        if not rows:
-            return "nothing measured yet"
-        lines = []
-        for r in rows:
-            mix = ", ".join(f"{k} {int(v * 100)}%"
-                            for k, v in list(r["job_mix"].items())[:3])
-            lines.append(
-                f"{r['topic']}: {r['volume']:,} searches/mo, "
-                f"click price {r['click_price']:.2f}, "
-                f"{int(r['branded_share'] * 100)}% name a brand; {mix}")
-        return "\n".join(lines)
 
     # -- OBSERVE ---------------------------------------------------------
 
@@ -533,8 +487,9 @@ class Run:
 
     # -- ORIENT ----------------------------------------------------------
 
-    def orient(self, iteration: int) -> None:
-        self.say("  ORIENT   placing keywords on the two axes")
+    def orient(self) -> None:
+        """Place every search not yet placed: every judged column."""
+        self.say("  PLACE    every search, every column")
         g = self.graph
 
         phrases = [p for p in K.mine_phrases(g.keywords.values(), limit=40)
@@ -549,15 +504,18 @@ class Run:
                                               self.args.asker))
 
         unjudged = sorted((k for k in g.keywords.values() if not k.judged),
-                          key=lambda k: -k.volume)[:self.args.judge_cap]
+                          key=lambda k: (-k.volume, k.term))
+        if self.args.judge_cap:
+            unjudged = unjudged[:self.args.judge_cap]
         if unjudged:
             self.stage(judge.assign(self.client, g, unjudged, self.args.asker))
         self.oriented_at = len(g.keywords)
-        self.infer()
         covered = K.share(g.certain_volume, g.total_volume)
-        self.say(f"      · {len(g.certain):,} of {len(g.judged):,} searches "
-                 f"revealed what the person wanted, covering "
-                 f"{covered * 100:.0f}% of measured searching")
+        sellable = sum(1 for k in g.keywords.values() if k.sellable)
+        self.say(f"      · {len(g.judged):,} searches placed; {len(g.certain):,} "
+                 f"revealed what the person wanted ({covered * 100:.0f}% of the "
+                 f"searching); {sellable:,} are people a newcomer could sell "
+                 f"to")
 
     def infer(self) -> None:
         """One request supplies every table and reads every measurement.
@@ -584,62 +542,10 @@ class Run:
             self.say(f"      · P({name}) "
                      f"{self.prior[name]:.2f} \u2192 {self.verdict[name]:.2f}")
 
-    # -- DECIDE ----------------------------------------------------------
-
-    def choose(self, offer) -> tuple[object, judge.Stage]:
-        if not self.net or not offer:
-            return None, judge.Stage("decide:unscoreable", 0, jev.Usage())
-        targets = list(MN.DECISION)
-        scored = []
-        for thread in offer:
-            tag = thread.key.rsplit("->", 1)[-1]
-            node = MN.PROBE_INFORMS.get(tag)
-            bits = (self.net.expected_gain(node, targets, self.evidence)
-                    if node else 0.0)
-            scored.append((bits, node, thread))
-        # Expected bits *per call*, not bits. A question worth a lot that
-        # usually returns nothing is worth less than a modest one that
-        # always lands, and which is which is a measured fact about each
-        # kind of follow-up rather than anything to judge:
-        #
-        #   diy, money, minority, growth   12 probes, 12 paid off
-        #   movers                          8 probes,  1 paid off
-        #   brands                          5 probes,  0 paid off
-        #
-        # Thirteen `brands` and `movers` probes cost $1.17 and produced one
-        # result. The record is kept on disk and every run adds to it, so
-        # the estimate sharpens with use.
-        scored = [(bits * insights.hit_rate(
-                       t.key.rsplit("->", 1)[-1]), bits, node, t)
-                  for bits, node, t in scored]
-        if not any(node for _, _, node, _ in scored):
-            return None, judge.Stage("decide:unscoreable", 0, jev.Usage(),
-                                     ["no open question maps to anything the "
-                                      "network measures"])
-        scored.sort(key=lambda x: -x[0])
-        expected, bits, node, thread = scored[0]
-        if expected < self.args.min_bits:
-            # Deliberately not "unscoreable": the network could price this
-            # and priced it at nearly nothing. Handing that to a model for a
-            # second opinion is how the floor gets talked out of, and an
-            # earlier version duly bought a probe worth 0.0002 bits.
-            return None, judge.Stage(
-                "decide:too-small", 0, jev.Usage(),
-                [f"the best remaining question is worth {expected:.4f} "
-                 f"expected bits, under the {self.args.min_bits} floor at "
-                 f"effort {self.args.effort} — "
-                 f"$0.09 for a rounding error"])
-        tag = thread.key.rsplit("->", 1)[-1]
-        return thread, judge.Stage(
-            "decide:bits", 0, jev.Usage(),
-            [f"worth {bits:.3f} bits about what the reader came for "
-             f"(via {node}); this kind of question has paid off "
-             f"{insights.hit_rate(tag):.0%} of the time, so "
-             f"{expected:.3f} expected bits for the $0.09"])
-
     def find_claims(self) -> list[judge.Claim]:
         self.say("  DECIDE   testing every claim the data could support")
-        candidates = insights.generate(self.graph)
+        candidates = insights.generate(self.graph) + stackrank.claims(
+            self.graph)
         if self.args.max_claims:
             candidates = candidates[:self.args.max_claims]
         if not candidates:
@@ -662,175 +568,124 @@ class Run:
 
     def go(self) -> None:
         a = self.args
-        self.say(f"seed “{a.keyword}” · {a.location} · "
-                 f"{a.iterations} probe(s) · ceiling ${a.max_spend:.2f}")
+        self.say(f"seed “{a.keyword}” · {a.location} · up to "
+                 f"{a.iterations} expansion(s) of the stack · ceiling "
+                 f"${a.max_spend:.2f}")
         self.say(f"asking on behalf of: {a.asker}")
 
         harvested = 0
         if not a.no_harvest:
             harvested = self.harvest(a.keyword)
         if not harvested:
-            # Either nobody selling ranks here, or harvesting was
-            # declined. Google's own idea list is the fallback, and
-            # on a niche seed it returns very little, which is itself
-            # worth reporting.
+            # Either nobody selling ranks here, or harvesting was declined.
+            # Google's own idea list is the fallback, and on a niche seed it
+            # returns very little, which is itself worth reporting.
             self.say("  OBSERVE  falling back to Google's idea list")
-        self.observe("expand", [a.keyword], f"what surrounds “{a.keyword}”")
-        last_paid_off = True
-        last_children: list[insights.Thread] = []
+        try:
+            self.observe("expand", [a.keyword], f"what surrounds “{a.keyword}”")
+        except (seo.BudgetExceeded, seo.OfflineMiss) as exc:
+            self.say(f"      · not bought: {exc}")
+        seed = self.graph.keywords.get(a.keyword.strip().lower())
+        if seed is not None:
+            seed.expanded = True
 
-        for i in range(a.iterations):
-            self.say(f"\niteration {i + 1}/{a.iterations}")
-            self.orient(i)
-            kept = self.find_claims()
-            self.say(f"      · {len(kept)} finding(s) standing")
-
-            children = insights.followups(self.graph, kept, depth=i)
-            children = [t for t in children if t.key not in self.chased
-                        and t.key.rsplit("->", 1)[-1] not in self.dead_tags]
-            # Depth-first: when the last probe answered its question, its own
-            # follow-ups go on the table first. When it did not, they are
-            # never created — that is the backtrack.
-            if last_paid_off:
-                last_children = children
-            self.open = self._merge(children)
-
-            if i == a.iterations - 1 or not self.open:
+        # The graph search, best first. Every search is placed and ranked;
+        # then, as far as effort allows, the top of the stack not yet
+        # explored is expanded — Google's own ideas around the searches
+        # worth most — and what comes back is vetted, grounded, placed and
+        # ranked again. It goes deeper where the value is. It replaced a
+        # loop that chased questions raised by findings and priced template
+        # guesses to answer them — `top modelling` was one of those guesses
+        # (it-23): expanding real searches brings back real searches.
+        self.orient()
+        for depth in range(1, a.iterations + 1):
+            nodes = frontier(self.graph)
+            if not nodes:
+                self.say("  STOP     nothing on the stack left to explore")
+                break
+            if not self.expand(nodes, depth):
                 break
 
-            offer = last_children or self.open
-            offer = [t for t in offer if t.key not in self.chased] or self.open
-
-            # Value of information, computed rather than guessed. Each open
-            # question is scored by how many bits of uncertainty answering it
-            # would remove from what the reader came to find out. Only when
-            # nothing on the table would move the network at all does this
-            # fall back to asking Jev to rate the options — the arithmetic is
-            # exact where it applies, and it costs no request.
-            thread, st = self.choose(offer)
-            self.stage(st)
-            if thread is None and st.name == "decide:unscoreable":
-                thread, st = judge.decide(self.client, self.graph, offer,
-                                          self.picture(), a.asker)
-                self.stage(st)
-            if thread is None:
-                self.say("  STOP     nothing left worth buying — the "
-                         "remaining budget goes unspent")
-                break
-
-            thread.status = "chasing"
-            # `chased` was written, read in three places, and never added
-            # to. Nothing else stops a thread being regenerated next
-            # iteration, so a question that *paid off* came back and was
-            # bought again: on `cad to bim tool` the same probe was bought
-            # five times in a row, three of them byte-identical replays,
-            # burning five of eight iterations on one question. Only a
-            # dead end was ever remembered, through `dead_tags`.
-            self.chased.add(thread.key)
-            self.trail.append(thread)
-            self.say(f"  ACT      {thread.question}")
-            try:
-                if thread.action == "harvest":
-                    before = set(self.graph.keywords)
-                    self.harvest(thread.payload[0])
-                    fresh = [t for t in self.graph.keywords
-                             if t not in before]
-                else:
-                    fresh = self.observe(thread.action, thread.payload,
-                                         thread.question)
-            except (seo.BudgetExceeded, seo.OfflineMiss) as exc:
-                thread.status = "unfunded"
-                thread.note = str(exc)
-                self.say(f"  STOP     {exc}")
-                break
-
-            # What came back is the probe's own rows, not the market
-            # summary. Handing it the global picture asked whether one
-            # small measurement had visibly moved a whole market — which it
-            # never has, so every probe read as a dead end.
-            returned = self.sample(fresh)
-            if not returned:
-                # Nothing survived vetting, so there is nothing to judge.
-                # Asking "did this bear on the question?" about an empty
-                # sample is not a question, and it was answered `P=0.51`
-                # — a coin flip promoted to "answered", which kept the
-                # thread alive and bought it again.
-                paid = False
-                st = judge.Stage("assess", 0, jev.Usage(),
-                                 ["nothing it brought back is in this "
-                                  "market — no sample to judge"])
-            else:
-                paid, st = judge.assess_probe(self.client, self.graph,
-                                              thread.question, returned,
-                                              a.asker)
-            self.stage(st)
-            thread.status = "paid_off" if paid else "dead_end"
-            insights.record_probe(thread.key.rsplit("->", 1)[-1], paid)
-            last_paid_off = paid
-            if not paid:
-                # Undo the tangent, and drop every other thread that asks
-                # the same kind of question. A person who finds that
-                # expanding on one brand name teaches nothing does not then
-                # try the next brand name.
-                dropped = self.graph.drop(fresh)
-                tag = thread.key.rsplit("->", 1)[-1]
-                self.dead_tags.add(tag)
-                killed = [t for t in self.open
-                          if t.key.rsplit("->", 1)[-1] == tag]
-                self.open = [t for t in self.open if t not in killed]
-                thread.note = (f"discarded {dropped:,} keywords it brought "
-                               f"in; dropped {len(killed)} other question(s) "
-                               f"of the same kind")
-                self.say(f"  BACK     dead end — discarded {dropped:,} rows "
-                         f"and {len(killed)} sibling question(s)")
-                last_children = []
-
-        # Anything bought by the last probe still needs placing. When the
-        # loop stopped without buying anything, re-running the whole orient
-        # would re-ask questions already answered — the cache makes that
-        # cheap but not free, and free is available.
-        changed = len(self.graph.keywords) != self.oriented_at
-        if changed:
-            self.orient(a.iterations)
-        # The buying searches' first pages are read before the last reading
-        # of the market, so nothing below rests on a search Google shows to
-        # be about something else.
-        dropped = self.read_buying_pages()
-        if dropped:
-            self.infer()
-        if dropped or changed:
-            kept = self.find_claims()
+        if len(self.graph.keywords) != self.oriented_at:
+            self.orient()
+        # Page one for the top of the stack, before anything is read off it:
+        # nothing below rests on a search Google shows to be about
+        # something else.
+        self.read_top_pages()
+        self.graph.stack()
+        self.infer()
+        self.find_claims()
         self.find_opportunities()
         if not self.args.no_forecast:
-            # Release the reserve now that the probes have had their turn.
+            # Release the reserve now that the search has had its turn.
             self.seo.max_spend_usd += self.reserve
             self.price_the_move()
         kept = [c for c in self.claims if c.survived()]
         self.say(f"\n{len(kept)} finding(s) survived · "
                  f"{self.seo.ledger.line()} · {self.jev_usage.line()}")
 
+    def expand(self, frontier: list, depth: int) -> bool:
+        """One step of the graph search: Google's ideas around the top of
+        the stack. False when the search should stop."""
+        seeds = [k.term for k in frontier]
+        for kw in frontier:
+            kw.expanded = True
+        thread = insights.Thread(
+            key=f"depth:{depth}",
+            question=(f"What surrounds the top of the stack — "
+                      f"“{seeds[0]}”"
+                      + (f" and {len(seeds) - 1} more" if len(seeds) > 1
+                         else "") + "?"),
+            action="expand", payload=seeds, depth=depth, status="chasing")
+        self.trail.append(thread)
+        self.say(f"\ndepth {depth}/{self.args.iterations}")
+        self.say(f"  EXPAND   {thread.question}")
+        before = {k.term for k in self.graph.keywords.values() if k.sellable}
+        try:
+            fresh = self.observe("expand", seeds, thread.question)
+        except (seo.BudgetExceeded, seo.OfflineMiss) as exc:
+            thread.status, thread.note = "unfunded", str(exc)
+            self.say(f"  STOP     {exc}")
+            return False
+        for term in fresh:
+            if term in self.graph.keywords:
+                self.graph.keywords[term].depth = depth
+        self.orient()
+        found = [k for k in self.graph.keywords.values()
+                 if k.sellable and k.term not in before]
+        worth = sum(k.money for k in found)
+        thread.status = "paid_off" if found else "dead_end"
+        thread.note = (f"{len(fresh):,} new searches in this market; "
+                       f"{len(found):,} of them people a newcomer could sell "
+                       f"to, worth {insights.money0(worth)} a month")
+        self.say(f"      · {thread.note}")
+        if not found:
+            self.say("  STOP     the best of what is left brought back nothing "
+                     "a newcomer could sell to")
+            return False
+        return True
+
     # -- where someone could win -------------------------------------------
 
-    def read_buying_pages(self) -> list[str]:
-        """Page one for the buying searches worth most, bought once and
-        used twice: each is held to the same test as the market's head —
-        is this search, as Google reads it, about this market? — before any
-        finding rests on it, and then read for where someone could win.
+    def read_top_pages(self) -> list[str]:
+        """Page one for the top of the stack, bought once and used twice:
+        each is held to the same test as the market's head — is this
+        search, as Google reads it, about this market? — before anything is
+        read off the stack, and then read for where someone could win.
 
-        The buying core is small next to the head, so the grounding by size
-        never reaches most of it, and it is where the report's money is:
-        `top modelling` read as `compare` and sat in the buying core of
-        `cad to bim`, pulling its average buyer click down to $8.33.
+        The top of the stack is small next to the head, so the grounding by
+        size never reaches most of it, and it is where the report's money
+        is: `top modelling` read as a buying search and sat among the
+        buyers of `cad to bim`, pulling its average buyer click down to
+        $8.33 (it-23).
         """
         level = EFFORT[self.args.effort]
-        core = sorted(O.buying_core(self.graph),
-                      key=lambda k: (-k.money, k.term))[:level["pages"]]
-        self.prefetch([k.term for k in core])
-        got = [k.term for k in core if self.read_page(k.term) is not None]
+        top = [k for k in self.graph.stack() if k.sellable][:level["pages"]]
+        self.prefetch([k.term for k in top])
+        got = [k.term for k in top if self.read_page(k.term) is not None]
         if not got:
             return []
-        self.say(f"  PAGE ONE read for the {len(got)} buying searches worth "
-                 f"most")
+        self.say(f"  PAGE ONE read for the top {len(got)} of the stack")
         return self.ground(got)
 
     def find_opportunities(self) -> None:
@@ -887,10 +742,13 @@ class Run:
             except (seo.OfflineMiss, seo.BudgetExceeded, seo.SeoError) as exc:
                 self.say(f"      · switching not measured: {exc}")
 
-        # Which buying searches one page could answer, and what holds it.
-        core = [k for k in sorted(O.buying_core(g),
-                                  key=lambda k: (-k.money, k.term))
-                if k.term in self.pages]
+        # Which buyers at the top of the stack one page could answer, and
+        # what holds that page. Buyers only: the families below speak of
+        # buying searches, and with learners among them "start with “as
+        # builts”" called 7,280 people learning what an as-built is "people
+        # buying or comparing" (it-24).
+        core = [k for k in g.stack() if K.tier(k) == 0
+                and k.term in self.pages]
         organic = {k.term: S.organic_rows(self.pages[k.term]) for k in core}
         features = {k.term: S.features(self.pages[k.term]) for k in core}
         groups = O.serp_clusters(core, organic, features)
@@ -903,10 +761,12 @@ class Run:
             -c.open_prize, -c.prize, c.anchor.term))
         if groups:
             covered = K.share(sum(c.prize for c in groups),
-                              sum(k.money for k in O.buying_core(g)))
-            self.say(f"      · {len(core)} buying searches fall into "
-                     f"{len(groups)} page(s)' worth of work, carrying "
-                     f"{covered:.0%} of the buyer money")
+                              sum(k.money for k in g.keywords.values()
+                                  if K.tier(k) == 0))
+            self.say(f"      · the top {len(core)} buyers on the stack fall "
+                     f"into {len(groups)} page(s)' worth of work, carrying "
+                     f"{covered:.0%} of the money a newcomer could reach "
+                     f"from buyers")
 
         # Who takes the clicks.
         shares = []
@@ -1014,13 +874,6 @@ class Run:
                  f"${row['cpc']:.2f} each = ${row['cost']:,.0f}/month "
                  f"(bid ${row['bid']:,.0f})")
 
-    def _merge(self, new: list[insights.Thread]) -> list[insights.Thread]:
-        """The open threads: what is on the table and not yet paid for."""
-        live = [t for t in self.open if t.key not in self.chased]
-        seen = {t.key for t in live}
-        return live + [t for t in new
-                       if t.key not in seen and t.key not in self.chased]
-
     # -- output ----------------------------------------------------------
 
     def manifest(self) -> dict:
@@ -1107,29 +960,27 @@ def cmd_run(args) -> int:
 
 def plan(args) -> int:
     """What a run would cost, without spending anything."""
-    # The harvest buys sites, the loop buys probes, and the forecast buys
-    # the answer. An earlier plan counted only the probes and told the
-    # caller half the truth.
     per_call = 0.09
+    level = EFFORT[args.effort]
     harvest = (0 if args.no_harvest else args.sites)
-    worst = (harvest + args.iterations) * per_call
+    calls = harvest + 1 + args.iterations + (0 if args.no_forecast else 1)
+    pages = 0 if args.no_ground else 4 * level["ground"] + level["pages"]
+    labs = 0.012 + 0.00012 * level["competition"] + 0.03
     print(json.dumps({
         "seed": args.keyword,
         "location": args.location,
         "effort": _effort_label(args.effort),
-        "billable_dataforseo_calls_at_most": harvest + args.iterations
-        + (0 if args.no_forecast else 1),
-        "buys": (f"{harvest} site harvest(s), up to {args.iterations} "
-                 f"probe(s), {args.judge_cap} searches read, and a probe is "
-                 f"only bought if it is expected to be worth "
-                 f"{args.min_bits} bits"),
-        "dataforseo_ceiling_usd": round(
-            min(worst + (0 if args.no_forecast else per_call),
-                args.max_spend), 2),
-        "jev_estimate_usd": round(0.01 * args.iterations, 3),
-        "note": "DataForSEO bills per call regardless of how many keywords "
-                "it carries; each price probe fills up to 1000 slots. "
-                "Cached probes are free and do not count.",
+        "buys": (f"{harvest} site harvest(s), the seed's ideas, up to "
+                 f"{args.iterations} expansion(s) of the top of the stack, up "
+                 f"to {pages} first page(s), Labs difficulty and share of "
+                 f"voice, and the closing forecast"),
+        "dataforseo_ceiling_usd": round(min(
+            calls * per_call + pages * PAGE_COST + labs, args.max_spend), 2),
+        "jev_estimate_usd": "about a thousandth of a cent a search placed",
+        "note": "A keyword call bills the same for one keyword or a "
+                "thousand. The search stops early when the top of the stack "
+                "brings back nothing a newcomer could sell to; cached calls "
+                "are free and do not count.",
     }, indent=2))
     return 0
 
@@ -1168,16 +1019,15 @@ def main(argv=None) -> int:
     r = sub.add_parser("run", help="run the loop and write a report")
     r.add_argument("keyword", help="the seed keyword")
     r.add_argument("--effort", default=str(DEFAULT_EFFORT),
-                   help="how hard to look, 1 to 5 (or glance, quick, normal, "
-                        "deep, exhaustive). One dial for probes, sites, how "
-                        "much gets read and how small an answer is worth "
-                        "buying. A ceiling, not a target: the loop still "
-                        "stops when nothing left is worth the money")
+                   help="how far the graph search goes, 1 to 5 (or glance, "
+                        "quick, normal, deep, exhaustive): sites harvested, "
+                        "expansions of the top of the stack, first pages "
+                        "read. A ceiling, not a target: the search stops "
+                        "when the top of the stack brings back nothing a "
+                        "newcomer could sell to")
     r.add_argument("--iterations", type=int, default=None,
-                   help="override the probe ceiling for this effort level")
-    r.add_argument("--min-bits", type=float, default=None,
-                   help="override the floor: the smallest expected gain, in "
-                        "bits, worth $0.09")
+                   help="override how many times the top of the stack may be "
+                        "expanded at this effort level")
     r.add_argument("--for", dest="asker", default=DEFAULT_ASKER,
                    help="who is asking — the value of a finding is relative "
                         "to them, so this changes what survives")
@@ -1203,8 +1053,8 @@ def main(argv=None) -> int:
                    help="override how many harvested searches get checked "
                         "for belonging to this market (by volume)")
     r.add_argument("--judge-cap", type=int, default=None,
-                   help="override how many searches get placed "
-                        "on the two axes")
+                   help="place only this many searches, largest first. By "
+                        "default every search collected is placed")
     r.add_argument("--max-claims", type=int, default=None)
     r.add_argument("--arm", choices=("jev", "code"), default="jev",
                    help="'jev' judges every claim; 'code' is the "

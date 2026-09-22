@@ -1,6 +1,6 @@
 ---
 name: keyword-insights
-description: Turn one keyword and an effort level into insights, ranked by value, backed by live Google search data — where the money is and is not ("the money is in services, not software"), where the growth is, who has already been picked and where nobody has, what people are actually trying to do, what paid search can buy — with every keyword, topic, test and probe attached as data files. Runs an OODA loop over DataForSEO keyword data the way a person works: measure, notice what is out of line, pay for one answer to the question that raises, go deeper when it pays off, and back out when a lead goes cold — then build every statement the data could support and keep only the ones that survive being tested. All judgment comes from TypeSafe's Jev model and all data from DataForSEO — no language model is involved at any step, so nothing is written by an LLM and the same keyword returns the same insights. Use this whenever someone wants to understand a market, niche, category or topic from what people search: "what's interesting about X", "give me insights on X", "research the market for X", "what do people actually want when they search for X", "is there anything in X", "what should I know about the X market", "find me an angle in X", "who's winning X", "analyse the keyword X", "what are people searching around X", "run a keyword analysis on X". Trigger even when the user never says "keyword", "SEO" or "search volume" — any request to understand a market or topic from real search behaviour belongs here. Distinct from `dataforseo-keywords`, which returns raw metrics for a list you already have, and from `demand-forecasting`, which converges on one buildable variant and prices customer acquisition; reach for this one when the deliverable is *insights about a market*, written down, with the data underneath them.
+description: Turn one keyword and an effort level into insights, ranked by value, backed by live Google search data — where the money is and is not ("the money is in services, not software"), where the growth is, who has already been picked and where nobody has, what people are actually trying to do, what paid search can buy — with every keyword ranked in one stack, and every column, test and step of the search attached as data files. Runs a graph search over DataForSEO keyword data the way a practitioner works a keyword sheet: collect the searches around a market, fill every column for every search — what it is about, what the person is trying to do, what kind of answer they want, who they are, whether a newcomer could sell to them — rank them in one stack by what they are worth, go deeper wherever the top of the stack is, then read the stack and keep only the statements that survive being tested. All judgment comes from TypeSafe's Jev model and all data from DataForSEO — no language model is involved at any step, so nothing is written by an LLM and the same keyword returns the same insights. Use this whenever someone wants to understand a market, niche, category or topic from what people search: "what's interesting about X", "give me insights on X", "research the market for X", "what do people actually want when they search for X", "is there anything in X", "what should I know about the X market", "find me an angle in X", "who's winning X", "analyse the keyword X", "what are people searching around X", "run a keyword analysis on X". Trigger even when the user never says "keyword", "SEO" or "search volume" — any request to understand a market or topic from real search behaviour belongs here. Distinct from `dataforseo-keywords`, which returns raw metrics for a list you already have, and from `demand-forecasting`, which converges on one buildable variant and prices customer acquisition; reach for this one when the deliverable is *insights about a market*, written down, with the data underneath them.
 ---
 
 # keyword-insights
@@ -12,8 +12,8 @@ number underneath them attached as files.
 python3 .claude/skills/keyword-insights/scripts/loop.py run "cad to bim" --effort 5
 ```
 
-That is the whole interface. The script measures, judges, chases, and
-writes two things beside each other:
+That is the whole interface. The script collects, places, ranks and goes
+deeper, and writes two things beside each other:
 
 ```
 insights-cad-to-bim.md          the insights, ranked by value
@@ -24,9 +24,10 @@ insights-cad-to-bim-data/       keywords.csv       offerings.csv  topics.csv
 ```
 
 **No language model is involved at any step.** Data comes from DataForSEO;
-every judgment — what a search is about, what the person wants, what kind
-of answer would satisfy them, whether a statement holds, what it is worth
-to the reader — is made by TypeSafe's Jev, a typed model that answers one
+every judgment — whether a search belongs to the market, what it is about,
+what the person wants, what kind of answer would satisfy them, who they
+are, whether a newcomer could sell to them, whether a statement holds, what
+it is worth to the reader — is made by TypeSafe's Jev, a typed model that answers one
 question at a time and returns a calibrated probability rather than prose;
 every sentence is assembled by code from measured numbers.
 
@@ -60,51 +61,72 @@ The same data judged for a different reader keeps a different set of
 findings. A seasonality finding matters enormously to someone buying ads in
 October and not at all to someone choosing what to build.
 
-## The loop
+## The graph search, and the stack
 
-It is shaped like a person working, not like a pipeline. A person does not
-run three fixed steps; they notice something odd, chase it, hit a dead end,
-back up, and take a different branch.
+A market is a graph — searches, the businesses ranking for them, and the
+searches around those — and a practitioner works it as a sheet: every
+keyword, every column, sorted by what it is worth, then dig where the top
+rows are. So does this.
 
 ```mermaid
 stateDiagram-v2
     direction LR
-    [*] --> OBSERVE
-    OBSERVE: OBSERVE<br/>one billable call
-    ORIENT: ORIENT<br/>place every search on two axes
-    DECIDE: DECIDE<br/>what is out of line, what to ask next
-    ACT: ACT<br/>buy one answer
-    ASSESS: ASSESS<br/>did that answer the question?
-    REPORT: REPORT
-
-    OBSERVE --> ORIENT
-    ORIENT --> DECIDE
-    DECIDE --> ACT: a thread is worth it
-    DECIDE --> REPORT: nothing left worth buying
-    ACT --> ASSESS
-    ASSESS --> ORIENT: paid off — go deeper
-    ASSESS --> DECIDE: dead end — undo it, take another thread
-    REPORT --> [*]
+    [*] --> COLLECT
+    COLLECT: COLLECT<br/>who ranks, harvested · the seed's ideas
+    PLACE: PLACE<br/>every search, every column
+    RANK: RANK<br/>the stack
+    EXPAND: EXPAND<br/>the top of the stack not yet explored
+    READ: READ<br/>page one · the stack · the tests
+    COLLECT --> PLACE
+    PLACE --> RANK
+    RANK --> EXPAND: effort left, and the last step found buyers
+    EXPAND --> PLACE
+    RANK --> READ: effort spent, or the trail went cold
+    READ --> [*]
 ```
 
-**Backtracking is literal.** When a probe's results do not bear on the
-question it was bought to answer, the loop discards the keywords it brought
-in and drops every other question of the same kind. Keeping a tangent would
-crowd out the next batch of judging and drag the market's medians toward a
-market nobody asked about; trying the next brand name after the first taught
-you nothing is not persistence.
+**Every search gets every column.** Measured by DataForSEO — searches a
+month, click price, bids, difficulty, four years of history. Judged by Jev —
+whether it belongs to the market (read against its first page, for the
+searches that carry the market), what it is about, what the person is trying
+to do, what kind of answer they want, who they are, and **business
+potential**: could a newcomer here sell to them? That is the column Ahrefs
+asks its users to fill in by hand, one keyword at a time; a search is
+*sellable* when more than half of Jev's weight says yes. Nothing is capped:
+judging a search costs about a thousandth of a cent, so the stack is the
+whole market, not its head.
 
-Dead ends go in the report. A branch that was chased and went nowhere is a
-real result and an expensive one.
+**The stack rank.** Three tiers, the funnel Grow and Convert measured
+(bottom-of-funnel visitors became leads at 4.78%, top-of-funnel at 0.19%):
+people a newcomer could sell to who are buying, comparing or looking for a
+supplier; then the rest a newcomer could sell to; then everyone else.
+Within a tier, the money in the clicks — searches times click price, what
+Ahrefs and Semrush call traffic value. Keys, not weights: the tiers are
+Jev's readings and the order within them is arithmetic, and nothing is
+traded against anything else. `keywords.csv` *is* the stack — every search,
+every column, ranked.
+
+**The search goes best-first.** Each unit of effort is one expansion:
+Google's own ideas around the twenty searches at the top of the stack not
+yet explored, one $0.09 call; what comes back is vetted, grounded, placed
+and ranked again, so the next step starts from the new top. It stops when
+effort is spent, or when the best of what is left brings back nothing a
+newcomer could sell to. It replaced a loop that chased questions raised by
+findings and priced template guesses to answer them — `top modelling` was
+one of those guesses (it-23). Expanding real searches brings back real
+searches, and "where next?" became the obvious answer: wherever the value
+is. Each step, its seeds and what it found are in `trail.csv`, and each
+search carries the depth at which the search found it.
 
 ## Effort
 
 One dial, 1 to 5, or the names `glance` `quick` `normal` `deep`
-`exhaustive`. It moves the things that have to move together — how many
-ranking businesses get harvested, how many probes are allowed, how much of
-the corpus is placed on the two axes, how many claims are tested, how many
-first pages are read (the market's largest searches, and its buying
-searches worth most), and the ceiling on spend ($0.40 at 1 to $2.20 at 5).
+`exhaustive`. It is how far the graph search goes: how many ranking
+businesses are harvested at the start (1 to 4), how many times the top of
+the stack is expanded (1 to 8), how many first pages are read — the
+market's largest searches held to what Google shows, and the top of the
+stack read for where someone could win — how many statements are tested,
+and the ceiling on spend ($0.40 at 1 to $2.20 at 5).
 
 ```bash
 --effort 1        # or glance
@@ -112,48 +134,13 @@ searches worth most), and the ceiling on spend ($0.40 at 1 to $2.20 at 5).
 --effort 5        # or exhaustive
 ```
 
-`--iterations`, `--sites`, `--judge-cap`, `--max-claims`, `--min-bits` and
+`--iterations`, `--sites`, `--judge-cap`, `--max-claims` and
 `--max-spend` still exist and still win where they are given. Effort only
 fills in what the caller left alone.
 
-**The dial is really the floor on what an answer is worth buying.** A probe
-costs $0.09 and buys some expected reduction in uncertainty about what the
-reader came for, so the only question that matters is *how small an answer
-will you pay $0.09 for* — 0.05 of a bit at effort 1, 0.002 at effort 5.
-Stating it that way retires the one arbitrary constant this loop had:
-nobody has to defend 0.01 any more, because it became the caller's choice,
-in units they can argue with.
-
-**It is a ceiling, not a target.** Effort 5 does not mean eight probes; it
-means up to eight, and the loop still stops the moment nothing on the table
-clears the floor. In the measured ladder below, effort 5 sometimes buys
-*fewer* probes than effort 3, because four harvests had already answered
-what two left open. A market with nothing in it costs the same at every
-setting.
-
-### What it actually buys
-
-Three runs at each level on the same seed, Jev cache off so every run asks
-fresh:
-
-| effort | sites | probes | keywords | coverage | findings | data | jev |
-|---|---:|---:|---:|---:|---:|---:|---:|
-| 1 glance | 1 | 0 | ~95 | 23–29% | 4, 4, 4 | $0.24 | $0.005 |
-| 3 normal | 2 | 1–2 | 434–735 | 42–57% | 3, 4, 6 | $0.48 | $0.025 |
-| 5 exhaustive | 4 | 2–3 | 731–1,027 | 44–64% | 4, 5, 5 | $0.68 | $0.035 |
-
-Read the two right-hand columns against each other. **Effort buys coverage,
-not findings.** The spread in findings *within* one effort level (3 to 6 at
-normal) is as wide as the spread across the whole dial, so two findings
-either way is noise and nobody should pick a setting expecting more of
-them. What moves is the share of the market a finding is about: a
-conclusion drawn over 57% of the searching is worth more than the same
-sentence drawn over 25% of it, and that is what the extra $0.44 buys.
-
-Findings are a count of things that survived testing, and survival is a
-judgment made one claim at a time — near the 0.5 line it goes either way
-between runs. Coverage is arithmetic over the whole corpus, so it is
-stable. That is why the ladder is read on coverage.
+**It is a ceiling, not a target.** Effort 5 means up to eight expansions;
+the search stops earlier when the top of the stack goes cold. A market with
+nothing in it costs the same at every setting.
 
 ## Who decides what
 
@@ -161,8 +148,8 @@ stable. That is why the ladder is read on coverage.
 
 | | does | never does |
 |---|---|---|
-| **Code** | sums, medians, ratios, slopes, sorting, batching, budget, assembling claim sentences from templates | decides whether a number is high, interesting, or worth reporting |
-| **Jev** | what a phrase means, what a searcher wants, which of two accounts the data supports, what is out of line, what to chase, when to stop, what matters to the reader | arithmetic, counting, comparing magnitudes, generating text |
+| **Code** | sums, medians, ratios, slopes, sorting the stack, choosing what to expand next (the top of the stack), batching, budget, assembling claim sentences from templates | decides whether a number is high, interesting, or worth reporting |
+| **Jev** | whether a search belongs, what it is about, what a searcher wants and who they are, whether a newcomer could sell to them, what a page on Google is, which of two accounts the data supports, what matters to the reader | arithmetic, counting, comparing magnitudes, generating text |
 
 Jev-1.13 cannot count and cannot do arithmetic, so asking it to compare
 numbers gets confident nonsense. It reads short phrases against explicit
@@ -207,7 +194,7 @@ in, that does not merely add noise — topics are mined by volume, so the
 incumbent's other business outvotes the market's own vocabulary and the
 report ends up about the wrong thing.
 
-Every search that comes in — from a harvest or a probe — is asked one
+Every search that comes in — from a harvest or an expansion — is asked one
 thing: **is it about what this market deals in, whatever the person wants
 to do with it?** Not whether a seller would care about it, which admits
 the customers' whole world (`structural engineering` and `architecture
@@ -257,6 +244,16 @@ list saying so.
 
 ## What comes out
 
+**The top of the stack, under the title.** Ten rows of buyers a newcomer
+could sell to, most valuable first, each with its searches a month, what
+its clicks are worth, its click price, difficulty, year on year, what the
+person is trying to do, what kind of answer they want and who they are —
+and how many of those buyers carry half of all their money. Then five rows
+of the next tier, people a newcomer could sell to who are not buying yet,
+and whether their money outweighs the buyers': on `cad to bim` two searches
+of people learning what an as-built is are worth more than every buyer in
+the market put together.
+
 **The insights, most valuable first.** Every statement the data could
 support is generated and tested (see **Findings**); the survivors are
 ranked by Jev's answer to one question — *which of these would change what
@@ -290,12 +287,12 @@ A market with nothing in it is a result.
 
 | file | what is in it |
 |---|---|
-| `keywords.csv` | every search: volume, click price, bids, competition, its topic, what the person wants, what kind of answer, companies named, where it came from, year on year |
+| `keywords.csv` | the stack rank — every search, most worth winning first: its tier, whether a newcomer could sell to it and how surely, volume, click price, what it is worth, difficulty, year on year, topic, what the person is trying to do, what kind of answer, who they are, companies named, where it came from and at what depth of the graph search |
 | `offerings.csv` | each kind of answer — a service, software, a product, information — and what it is worth |
 | `topics.csv` | each thing people search about, and what it is worth |
 | `tested.csv` | every statement generated, each test's score, its rank or the reason it fell |
 | `series.csv` | searches a month for every keyword, month by month, four years |
-| `trail.csv` | every question the loop chased, what it bought, what came back |
+| `trail.csv` | every step of the graph search — the searches expanded, at what depth, and what came back |
 | `network.json` | the market network's conclusions before and after measuring, and what moved them |
 | `forecast.json` | Google's forecast for the searches worth bidding on |
 | `run.json` | the run: seed, effort, reader, what every stage cost |
@@ -305,8 +302,7 @@ A market with nothing in it is a result.
 
 ### The market network
 
-The loop decides what to buy next by **expected entropy reduction** over a
-small Bayes network of what a market can be — will people pay, do the words
+A small Bayes network of what a market can be — will people pay, do the words
 reveal what anyone wants, have buyers settled on suppliers, is there a free
 route, is it growing. **Jev supplies every probability table in one
 request**; measurements enter as evidence; code does exact inference. The
@@ -316,10 +312,11 @@ zero-shot, and a conventional engine answers an unbounded family of
 queries without another model call. The structure was audited, not assumed
 (ledger it-11).
 
-Its conclusions used to open the report. They are in `network.json` now:
+Its conclusions used to open the report, and its expected entropy
+reduction used to choose the probes. They are in `network.json` now:
 **its calibration is unverified**, and a probability the reader cannot check
-is not an insight — it steers the probes, and the file says what it
-concluded and what moved it.
+is not an insight; the graph search goes where the value is instead (it-24),
+and the file says what the network concluded and what moved it.
 
 ## Where to win
 
@@ -400,26 +397,38 @@ against a number the reader supplied.
 
 ## The graph
 
-Three axes and one set of names. Every finding is a statement about this
-structure.
+Every search, and the columns Jev fills for it. Every finding is a
+statement about this structure, and the stack is this structure sorted.
 
 ```mermaid
 flowchart LR
   subgraph measured["measured — DataForSEO"]
-    KW["keyword<br/>volume · click price · 12-month trend"]
+    KW["keyword<br/>volume · click price · 48-month trend<br/>difficulty · page one"]
   end
   subgraph judged["judged — Jev"]
     T["topic<br/>the thing being looked for"]
     J["job<br/>what they are trying to do"]
     O["offering<br/>what kind of answer would satisfy them"]
+    W["who<br/>firm · practitioner · learner · consumer"]
+    P["potential<br/>could a newcomer sell to them?"]
     E["brand<br/>a company already named"]
   end
   KW -->|ABOUT| T
   KW -->|SERVES| J
   KW -->|WANTS| O
+  KW -->|IS| W
+  KW -->|SELLABLE| P
   KW -->|NAMES| E
   T -.->|a cell: people wanting T in order to J| J
 ```
+
+**Who** is fixed and universal like the others — a firm buying for work,
+someone doing the work themselves, someone learning it, someone buying for
+themselves — and held out when a search does not say. **Potential** is
+Ahrefs' business potential, asked for a newcomer: asked for any business
+selling here, people pricing a Revit licence ranked among the searches most
+worth selling to, which is true for Autodesk and no use to anyone entering
+(it-24).
 
 The **job** taxonomy is fixed and universal — `buy`, `compare`, `learn`,
 `self_serve`, `fix`, `local`, `career`, `brand_desk`. Eight things a person
@@ -511,21 +520,38 @@ buyers in it. Three families once said things their numbers contradicted
 to be a group. Whether the contrast matters is the tests' call, and where it
 ranks is the reader question's.
 
+**Reading the stack — "the top of the stack is X."** What a practitioner
+sees first in a sorted sheet is what the top rows share that the market
+does not. The top is the fewest buyers a newcomer could sell to, from the
+top of the stack down, that carry half of all such buyers' money — half is
+the median of that money, not a cut chosen here, and buyers only, because
+two huge learning searches otherwise make "the top is people trying to
+understand it" (it-24). For each column Jev fills — what kind of answer,
+who is searching, what about — code names the value with the most of the
+top's money and builds the statement only when the top holds more of it
+than the market's searching does, and it leads the runner-up, both as
+printed:
+
+| family | reads | example |
+|---|---|---|
+| `stack_offering` | the top's money by kind of answer, against all searching | *The top of the stack is people looking for services* — 57% of the top's money, 5% of the searching |
+| `stack_audience` | the same, by who is searching | *The top of the stack is firms buying for work* |
+| `stack_topic` | the same, by what they search about | *The top of the stack is searches about "scan to bim"* |
+
 ## Cost
 
-Every DataForSEO call bills the same whether it carries one keyword or a
-thousand, so a probe that tests 26 guesses has wasted nine tenths of what it
-paid for. Probes are filled to the brim.
+Every DataForSEO keyword call bills the same whether it carries one
+keyword or a thousand, so each expansion is filled to twenty seeds, the most
+Google takes.
 
 | | typical run |
 |---|---|
-| DataForSEO | one harvest per site plus up to `--iterations` probes, ~$0.09 each, and one closing forecast; page one at $0.002 a search — at most four times `ground` plus `pages`, 260 at effort 5; Labs difficulty (~$0.012 plus $0.00012 a search) and share of voice (~$0.014) |
-| Jev | $0.005–0.04 — input tokens only, output is free |
-| default `--effort normal` | **~$0.46 and about 25 seconds** |
+| DataForSEO | one harvest per site, the seed's ideas, and up to `--iterations` expansions of the stack, ~$0.09 each, and one closing forecast; page one at $0.002 a search — at most four times `ground` plus `pages`, 260 at effort 5; Labs difficulty (~$0.012 plus $0.00012 a search) and share of voice (~$0.014) |
+| Jev | about a thousandth of a cent a search placed, every search — $0.15–0.40 for the few thousand an effort-5 search collects; input tokens only, output is free |
 
-Judgment is 5% of the bill, which decides an argument that comes up
-repeatedly: given a harvest already bought for $0.09, it is never worth
-saving a cent of Jev by leaving part of it unread. See **Effort** above,
+Judgment is the small part of the bill, which decides an argument that
+comes up repeatedly: given searches already bought, it is never worth
+saving a cent of Jev by leaving some of them unplaced. See **Effort** above,
 and `--relevance-cap`.
 
 ```bash
@@ -561,9 +587,10 @@ seasonal artefact wearing a trend's clothes. See `references/graph.md`.
    all; `exhaustive` when the answer is going to be acted on and the
    difference between 25% and 57% of the searching matters. `--dry-run`
    prints what any setting would cost before spending a cent.
-5. **Read the insights; open the data when a number matters.** Every
-   statement that did not hold is in `tested.csv` with the reason — what
-   was looked for and not found is often as useful as what was.
+5. **Read the stack and the insights; open the data when a number
+   matters.** `keywords.csv` is the whole stack — sort it by any column.
+   Every statement that did not hold is in `tested.csv` with the reason —
+   what was looked for and not found is often as useful as what was.
 
 Credentials come from the environment and are never printed or written to
 any output: `DATA_FOR_SEO_LOGIN` / `DATA_FOR_SEO_PASSWORD`, and
@@ -592,13 +619,14 @@ improvements have already been tried, and several of them made things worse.
 
 | | |
 |---|---|
-| `scripts/loop.py` | the OODA driver and the CLI |
+| `scripts/loop.py` | the graph search and the CLI |
 | `scripts/seo.py` | DataForSEO, cached and budgeted, with real billed costs |
 | `scripts/serp.py` | page one for a search, from DataForSEO — who ranks, the ads, the features |
 | `scripts/opportunity.py` | where to win: page-one clusters, the click split, and the practitioner families |
-| `scripts/kgraph.py` | the graph and all the arithmetic. No judgment |
+| `scripts/kgraph.py` | the graph, the stack rank and all the arithmetic. No judgment |
 | `scripts/judge.py` | every Jev question in the skill |
-| `scripts/insights.py` | claim templates and the follow-up table |
+| `scripts/insights.py` | claim templates, and the trail record |
+| `scripts/stackrank.py` | reading the stack: what the top holds that the market does not |
 | `scripts/market_net.py` | the Bayes net: variables, structure, Jev-supplied tables, exact inference |
 | `scripts/report.py` | the insights file and the data files beside it |
 | `scripts/jev.py` | typed Jev client, stdlib only |

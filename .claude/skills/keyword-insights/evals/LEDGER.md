@@ -1643,3 +1643,115 @@ wants". Its evidence carried the 121% share above; fixed, the finding reads
 fair (0.59) and wins its account (0.72), and the value floor now judges it
 background — 40% that it changes a founder's decision. Recorded, not
 relabelled.
+
+## it-24 — the stack rank, and a graph search that goes where the value is
+
+Asked for: *stack-rank all the keywords, with every appropriate column
+populated by Jev; that gets us deeper into the graph search. Each graph
+search is effort, and once the keywords are collected, stack-rank them to
+find insights.*
+
+### Every search, every column
+
+Jev placed the largest 150–600 searches by volume and left the rest
+unread. Now it places every search collected — judging one costs about a
+thousandth of a cent — and fills two more columns:
+
+- **Business potential**, the column Ahrefs asks its users to fill in by
+  hand for every keyword, as a Jev Score from 0 to 3. A search is
+  *sellable* when more than half the weight is on the two levels that say
+  yes. It is asked for **a newcomer**: asked for "a business selling into
+  the market", the first expansion ranked people pricing a Revit licence
+  among the searches most worth selling to — true for Autodesk.
+- **Who is searching** — a firm buying for work, someone doing the work
+  themselves, someone learning it, someone buying for themselves — held
+  out when it does not read, like the other axes.
+
+### The stack
+
+`Graph.stack` sorts every search in three tiers — the funnel Grow and
+Convert measured (bottom-of-funnel 4.78%, top-of-funnel 0.19%): people a
+newcomer could sell to who are buying, comparing or looking for a
+supplier; the rest a newcomer could sell to; everyone else — and by the
+money in the clicks within each. Ranked on money alone, `bim construction`
+(people learning what BIM is) sat above `bim services`. `keywords.csv` is
+the stack: rank, tier, every measured and judged column, and the depth at
+which the search found it.
+
+### The graph search
+
+It replaced the loop's follow-up questions, their template price probes
+(which produced `top modelling`), the network's entropy-based choice of
+probe, and the assess-and-backtrack step. Best-first: each unit of effort
+expands the twenty searches at the top of the stack not yet explored —
+Google's ideas for twenty seeds is one $0.09 call — and what comes back is
+vetted, grounded, placed and ranked again. It stops when an expansion
+brings back nothing a newcomer could sell to.
+
+On `cad to bim` at effort 5 all eight expansions paid off: the first
+(around `bim modeling services`) found 161 new sellable searches; the
+fourth and fifth found sellable searches worth nothing in clicks; the
+eighth, around `bim fees`, found 319 worth $127,656 a month — the
+as-builts. Best-first is not monotonic, which is why the stop is "nothing
+sellable at all", not "nothing worth money".
+
+### Reading the stack
+
+The top is the **head** — the fewest buyers a newcomer could sell to,
+from the top down, carrying half of all such buyers' money. It was first
+taken over everything sellable, and two searches of people learning what
+an as-built is, worth more than every buyer in the market together, joined
+it: the stack read "the top is people trying to understand it". Buyers
+only, now. `stackrank.py` names, per column Jev fills, the value with the
+most of the head's money, when the head holds more of it than the market's
+searching and it leads the runner-up as printed. What the buyers are doing
+is not read — they are buyers by construction.
+
+The report puts the stack under its title: the ten buyers most worth
+selling to, then five of the next tier, and whether that tier's money
+outweighs the buyers'. The opportunity layer groups buyers only: with
+learners in it, "Start with “as builts”" called 7,280 people learning
+what an as-built is "people buying or comparing".
+
+### What it says
+
+`cad to bim`, effort 5: 2,751 searches, eight expansions. **148 buying
+searches a newcomer could sell to, worth $96,542 a month, half of it in
+three: `bim modeling services`, `bim services`, `bim consultant`.** Next
+tier: 686 searches worth $629,999 a month — `bim modeling`, `as builts`,
+`as built drawings`, `revit library` at 3.03x — more than every buyer
+together. Findings: buyers are answered first by specialist firms (88% of
+page-one clicks); the top of the stack is people looking for services
+(100% of the head, 5% of the searching) and firms buying for work (100%,
+26%); a services lead costs $830, a software lead $201; the open ground is
+in services, not software.
+
+AnswerThePublic space: 169 buyers worth $204,955, half in `seo keyword
+research tools`, `best seo tool for agencies` and `best keyword research
+tool`; the next tier worth $879,239, led by `seo keyword research`.
+
+| | `cad to bim` | AnswerThePublic |
+|---|---:|---:|
+| searches collected | 2,751 | 1,102 |
+| expansions | 8 of 8 paid off | 8 of 8 |
+| data, fresh | $1.45 | $1.30 |
+| judgment | $0.16 | $0.15 |
+
+### The cost of placing everything, and a stop
+
+Placing every search moved judgment from a few cents to $0.15–0.43 a run —
+the broad `project management software` eval case alone used $0.43. The
+live eval pass that would cache the new expansions for the offline suite
+ran the first case (jev arm 6/7, the known `ambiguity` miss) and then
+TypeSafe returned **402: the organization has no API credits left**. The
+remaining seven runs could not be made; the suite is not recorded for this
+iteration. A run that hits it fails at the end and writes nothing — a
+graceful stop, and a Jev spend ceiling like the DataForSEO one, are the
+next things this needs.
+
+### The suite
+
+| | before | after |
+|---|---:|---:|
+| selftest | 199/199 | **204/204** |
+| evals | 21/22, 19/21 | not run to completion — Jev credits exhausted |

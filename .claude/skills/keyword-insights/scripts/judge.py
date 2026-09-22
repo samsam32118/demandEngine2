@@ -558,11 +558,27 @@ OFFERING_CRITERIA = {
           "or nothing that says what kind of answer they want",
 }
 
+AUDIENCE_CRITERIA = {
+    **K.AUDIENCES,
+    NONE: "Nothing in the search says who is typing it",
+}
+
+# Asked for a newcomer, because that is who the reader is. Asked for any
+# business selling here, the first expansion of `cad to bim` ranked people
+# pricing a Revit licence among the searches most worth selling to — true
+# for Autodesk, and no use to anyone entering the market (it-24).
+POTENTIAL_QUESTION = ("A new business is entering the `market` market and "
+                      "wants customers. Could it sell to the person who "
+                      "typed `search`?")
+
 
 def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
            asker: str) -> Stage:
-    """Place each keyword on the three axes: what it is about, what for,
-    and what kind of answer would satisfy the person searching.
+    """Fill every judged column of the stack rank for each keyword: what it
+    is about, what for, what kind of answer would satisfy the person
+    searching, who they are, and whether a business selling here could
+    sell to them — Ahrefs' business potential, which its users fill in by
+    hand, one keyword at a time.
 
     Containment settles the topic axis wherever the topic is literally in the
     keyword — that is a fact about the string, and paying a model to read a
@@ -612,10 +628,21 @@ def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
                             "of answer are they hoping to find?",
             },
             criteria=OFFERING_CRITERIA)
+        questions[f"who:{i}"] = jev.Choice(
+            instructions={
+                "search": kw.term,
+                "question": "Someone types `search` into Google. Who are "
+                            "they most likely to be?",
+            },
+            criteria=AUDIENCE_CRITERIA)
+        questions[f"potential:{i}"] = jev.Score(
+            instructions={"search": kw.term, "market": graph.seed,
+                          "question": POTENTIAL_QUESTION},
+            criteria=list(K.POTENTIAL_LEVELS))
 
     result = client.ask(_market_state(graph, asker), questions)
 
-    low_topic = low_job = low_offer = 0
+    low_topic = low_job = low_offer = low_who = sellable = 0
     for i, kw in enumerate(keywords):
         if i in needs_topic:
             answer = result.choice(f"topic:{i}")
@@ -637,6 +664,18 @@ def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
         kw.offering_certain = bool(kw.offering) and decisive(offer)
         if not kw.offering_certain:
             low_offer += 1
+        who = result.choice(f"who:{i}")
+        kw.audience = who.choice if who.choice in K.AUDIENCES else ""
+        kw.audience_confidence = who.confidence
+        kw.audience_certain = bool(kw.audience) and decisive(who)
+        if not kw.audience_certain:
+            low_who += 1
+        pot = result.score(f"potential:{i}")
+        p = pot.probabilities
+        kw.potential = pot.score
+        kw.sellable_p = p.get("2", 0.0) + p.get("3", 0.0)
+        kw.sellable = kw.sellable_p > YES
+        sellable += kw.sellable
 
     notes = [f"{len(keywords)} keywords judged; "
              f"{len(keywords) - len(needs_topic)} placed by containment"]
@@ -650,66 +689,12 @@ def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
         notes.append(f"{low_offer} of {len(keywords)} searches did not say "
                      f"what kind of answer they wanted — a service, "
                      f"software, a product or information")
+    if low_who:
+        notes.append(f"{low_who} of {len(keywords)} searches did not say who "
+                     f"was searching")
+    notes.append(f"{sellable} of {len(keywords)} are people a newcomer could "
+                 f"sell to")
     return Stage("assign", len(questions), result.usage, notes)
-
-
-# --------------------------------------------------------------------------
-# Decide: spend, or stop?
-# --------------------------------------------------------------------------
-
-def decide(client: jev.Client, graph: K.Graph, probes: Sequence[Any],
-           picture: str, asker: str) -> tuple[Any | None, Stage]:
-    """Choose the next measurement, or decline to make one.
-
-    There is one stopping mechanism, not two. An earlier version also asked
-    "is the picture complete?", which is a question about coverage — and
-    after one expansion returning 1,651 keywords the honest answer is yes,
-    so the loop stopped before it had chased anything. A person does not
-    stop when the picture is complete; they stop when nothing left on the
-    table looks worth the trouble. That is exactly what the bottom level of
-    this rubric says, so it is the only gate needed.
-    """
-    if not probes:
-        return None, Stage("decide", 0, jev.Usage())
-
-    questions: dict[str, jev.Question] = {}
-    for i, probe in enumerate(probes):
-        questions[f"gain:{i}"] = jev.Score(
-            instructions={
-                "question": "We can pay for one more measurement. How much "
-                            "would answering `open_question` change what can "
-                            "be said about `market`?",
-                "open_question": probe.label,
-                "already_measured": picture,
-            },
-            criteria=[
-                "Nothing — this covers ground already measured",
-                "A little — more examples of something already understood",
-                "Something real — a part of this market currently invisible",
-                "A lot — it would likely change the conclusion, not just add "
-                "detail",
-            ])
-
-    result = client.ask(_market_state(graph, asker), questions)
-    scored = []
-    for i in range(len(probes)):
-        answer = result.score(f"gain:{i}")
-        worthless = max(answer.probabilities,
-                        key=answer.probabilities.get) == "0"
-        scored.append((answer.normalized, -i, i, answer, worthless))
-    scored.sort(reverse=True)
-    _, _, best_i, best, worthless = scored[0]
-    if worthless:
-        return None, Stage("decide", len(questions), result.usage,
-                           ["stopping: the best remaining question would "
-                            "only re-measure what is already known"])
-    chosen = probes[best_i]
-    return chosen, Stage("decide", len(questions), result.usage,
-                         [f"chasing: {chosen.label[:90]} "
-                          f"(gain \u201c{best.label[:40]}\u201d)"])
-
-
-
 
 
 # --------------------------------------------------------------------------
@@ -1109,37 +1094,3 @@ def rank(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
     return Stage("rank", len(groups) + 1, usage,
                  [f"{len(groups)} group(s) of at most {GROUP}; lead finding "
                   f"{lead} (confidence {confidence:.2f})"])
-
-
-def assess_probe(client: jev.Client, graph: K.Graph, question: str,
-                 after: str, asker: str) -> tuple[bool, Stage]:
-    """Did the measurement we just bought answer the question we asked?
-
-    This is the backtracking test. A person chasing a hunch knows when the
-    trail has gone cold — not because a number fell below a line, but
-    because what came back was not about the thing they were asking. Getting
-    that judgment from Jev is what lets the loop abandon a branch and take
-    another, which is the difference between following a lead and grinding
-    through a checklist.
-    """
-    questions = {
-        "answered": jev.Noul(
-            instructions={"question_asked": question,
-                          "what_came_back": after,
-                          "question": "We paid to have `question_asked` "
-                                      "answered, and `what_came_back` is "
-                                      "what the measurement returned. Does "
-                                      "it bear on the question?"},
-            criteria={
-                "true": "These searches are about the thing the question "
-                        "asked about — they show what it wanted to know, "
-                        "whichever way the answer falls",
-                "false": "These searches are about something else, so the "
-                         "question is no better answered than before",
-            })}
-    result = client.ask(_market_state(graph, asker), questions)
-    answered = result.noul("answered")
-    return answered.yes(YES), Stage(
-        "assess", 1, result.usage,
-        [("answered" if answered.yes(YES) else "dead end") +
-         f" (P={answered.noul:.2f})"])
