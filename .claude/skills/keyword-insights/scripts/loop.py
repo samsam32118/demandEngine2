@@ -225,7 +225,61 @@ class Run:
         self.say(f"      · {len(call.rows):,} rows, {added:,} new"
                  f" · ${call.cost_usd:.4f}"
                  f"{' (cached)' if call.from_cache else ''}")
-        return [t for t in self.graph.keywords if t not in before]
+        fresh = [self.graph.keywords[t] for t in self.graph.keywords
+                 if t not in before]
+        gone = set(self.vet(fresh))
+        if gone:
+            self.say(f"      · {len(gone):,} of them are not in this "
+                     f"market — dropped before they can outvote it")
+        return [k.term for k in fresh if k.term not in gone]
+
+    def vet(self, fresh: list) -> list[str]:
+        """Drop everything in `fresh` that does not belong to this market.
+
+        A business is wider than its market, and so is Google's idea list
+        for a word. Harvesting Radar Healthcare for `ambulance software`
+        brought in 503,680 searches a month of which 680 were ambulances;
+        expanding around a keyword-research tool brought in
+        `adwords for google` at 550,000 a month, which is people looking
+        for Google Ads. Topics are mined by volume, so left in, the
+        largest intruder outvotes the market's own vocabulary and the
+        report comes out about the wrong thing.
+
+        Two rules, both learned the expensive way.
+
+        **An unvetted row is not evidence.** The filter reads the biggest
+        terms first and used to admit everything below the cap without
+        asking. Sorting by volume means the terms it checks are the
+        incumbent's largest pages — the ones most likely to be its *other*
+        business — so it was fair to wonder whether the tail was cleaner
+        than the head. It is not: of 200 sampled from Radar Healthcare's
+        1,467 unchecked keywords, 17% belonged to this market, against 18%
+        of the 400 that were checked.
+
+        **Every path in, not just the ones you thought of.** This ran on
+        site harvests only, which was a guess about where intruders come
+        from and it was wrong. On `answerthepublic.com` the site harvests
+        were clean and 71% of the corpus volume arrived through probe
+        expansions, unvetted, led by a 550,000-a-month search for a
+        different product. A filter that covers one of two doors is not a
+        filter.
+        """
+        if not fresh:
+            return []
+        ranked = sorted(fresh, key=lambda k: -k.volume)
+        candidates = ranked[:self.args.relevance_cap]
+        unread = [k.term for k in ranked[self.args.relevance_cap:]]
+        drop, stage = judge.keep_relevant(
+            self.client, self.graph, candidates, self.args.asker)
+        self.stage(stage)
+        if unread:
+            self.say(f"      · {len(unread):,} below the "
+                     f"{self.args.relevance_cap:,} the cap pays to read — "
+                     f"not vetted, so not admitted")
+        gone = list(drop) + unread
+        if gone:
+            self.graph.drop(gone)
+        return gone
 
     def harvest(self, query: str) -> int:
         """Turn a word into the businesses selling behind it, then harvest.
@@ -314,20 +368,7 @@ class Run:
             # It costs 5% of the harvested volume and removes four fifths
             # of the terms, because the tail is long and thin by
             # construction.
-            drop: list[str] = []
-            if fresh:
-                ranked = sorted(fresh, key=lambda k: -k.volume)
-                candidates = ranked[:self.args.relevance_cap]
-                unread = [k.term for k in ranked[self.args.relevance_cap:]]
-                drop, stage = judge.keep_relevant(
-                    self.client, self.graph, candidates, self.args.asker)
-                self.stage(stage)
-                if unread:
-                    self.say(f"      . {len(unread):,} below the "
-                             f"{self.args.relevance_cap:,} the cap pays to "
-                             f"read — not vetted, so not admitted")
-                if drop or unread:
-                    self.graph.drop(list(drop) + unread)
+            self.vet(fresh)
 
             kept = [t for t in self.graph.keywords
                     if self.graph.keywords[t].source == f"site:{site.domain}"]

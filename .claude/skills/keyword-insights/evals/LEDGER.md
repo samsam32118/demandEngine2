@@ -884,3 +884,48 @@ Two harness changes came out of this. The probes column prints probes
 is zero, so the ledger's "did it chase anything" metric had been silently
 reading as "no". And `coverage` is now scored, because it is the metric
 that responds to effort.
+
+---
+
+## it-17 — a filter on one of two doors is not a filter
+
+it-16 fixed the relevance filter to fail closed, and left it where it had
+always been: on site harvests only. That placement was a guess about where
+off-market keywords come from, and the first live run after the fix showed
+the guess was wrong.
+
+Running `https://answerthepublic.com/en` at effort 5: the two site harvests
+were clean, and **71% of the corpus volume arrived through probe
+expansions**, never vetted. The single largest term in the market was
+`adwords for google` at 550,000 searches a month — people looking for
+Google Ads, a different product — carrying 28% of the whole corpus on its
+own. `gaming keywords` at 22,200 came in the same way and became one of the
+twenty topics the report drew conclusions across.
+
+`observe()` called `add_rows` and returned. A site harvest is a business's
+whole footprint and an expansion is Google's idea list for a string; both
+are wider than the market, and only one was being checked.
+
+The vetting is now a method both paths call.
+
+| | before | after |
+|---|---:|---:|
+| keywords | 1,649 | 849 |
+| searches a month | 1,941,380 | 873,950 |
+| volume from unvetted expansions | **71%** | 0% |
+| intent resolved (coverage) | 75% | **78%** |
+| findings | 6 | 5 |
+| P(paid channel pays for itself) | 0.48 | 0.51 |
+| P(incumbents hold it) | 0.44 | **0.28** |
+| DataForSEO | $0.61 | $0.12 |
+
+The market halved and got more legible. `incumbents_hold_it` fell from 0.44
+to 0.28 because the 46% branded share that drove it was largely `adwords`
+and `keyword planner` — Google's own products, named by people searching
+for Google, not evidence that buyers of *this* category have settled on a
+supplier. That is the reading a competitor would have acted on, and it was
+wrong.
+
+Suite unchanged at 18/18 jev, selftest 69/69. The cost of the extra
+judgment is real but small: Jev per run went from $0.051 to $0.039 here,
+because vetting earlier means judging a smaller corpus later.
