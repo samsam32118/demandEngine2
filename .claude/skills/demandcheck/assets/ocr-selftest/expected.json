@@ -1,0 +1,49 @@
+{
+  "note": "Synthetic ad renders drawn by make_fixtures.py \u2014 not real Google creatives. Checked by `ocr_creatives.py --self-test`.",
+  "cases": [
+    {
+      "file": "text-ad.png",
+      "expect_words": [
+        "cold plunge tubs",
+        "recovery",
+        "chiller",
+        "plunge.com",
+        "shop now"
+      ],
+      "expect_fields": {
+        "headline": "Cold Plunge Tubs Built For",
+        "cta": "Shop Now"
+      }
+    },
+    {
+      "file": "banner-300x250.png",
+      "expect_words": [
+        "recover",
+        "ice bath therapy",
+        "1,299",
+        "learn more"
+      ],
+      "expect_fields": {
+        "headline": "Recover",
+        "cta": "Learn More"
+      }
+    },
+    {
+      "file": "photo-overlay.png",
+      "expect_words": [
+        "sauna kits delivered",
+        "warranty",
+        "redwoodoutdoors.com"
+      ],
+      "expect_fields": {
+        "headline": "Sauna Kits Delivered"
+      }
+    },
+    {
+      "file": "blank.png",
+      "expect_words": [],
+      "expect_fields": {},
+      "expect_verdict": "no_text"
+    }
+  ]
+}

@@ -1,0 +1,57 @@
+{
+  "skill_name": "demand-forecasting",
+  "note": "Live runs spend real API budget (DataForSEO + BrightData, ~$0.50-2.00 per full loop). Confirm credentials and budget before running. Assertions are checkable from the lab directory each run produces.",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have a vague startup idea: AI meeting notes. There are a hundred versions of this and I don't know which one to build. Run your demand discovery loop on it \u2014 I want to know which precise variant has real demand, and what it would actually cost me to acquire a customer there. Data budget: $0.55.",
+      "expected_output": "A lab directory research/demand/<slug>/ containing maze.json (10+ nodes with axes and statuses), an append-only notebook.md, pre-registered hypothesis cards with numeric thresholds and kill criteria, banked raw data from at least 2 signal families, cac.py JSON output, and report.md with ranked verdicts, a CAC band and repay table per surviving node, an options menu handing the worth-it decision to the user, assumptions register, dead corridors, spend ledger total under budget, and a numeric go/no-go confirmation test.",
+      "files": [],
+      "assertions": [
+        "A lab directory exists with maze.json, notebook.md, and at least one experiments/E* directory",
+        "maze.json contains at least 10 nodes, each with a title and at least the WHO axis set, and at least one node in a terminal status (validated/refuted/pruned)",
+        "At least one experiments/E*/card.md exists containing a numeric threshold table and a 'Kill criteria' section written before data files appear in its data/ dir",
+        "Keyword pricing was batched: the notebook/ledger shows one search-volume call covering multiple nodes' clusters, not one call per node",
+        "Keyword clusters were harvested, not invented: the lab shows at least one competitor-footprint pull (for-site) or banked SERP/ad-copy harvest feeding the clusters before pricing, and purely invented terms are labeled as guesses in the notebook or cluster notes",
+        "Any sustained-advertiser claim is backed by a banked ad-library pull with run dates (days_running from dataforseo-ads-transparency, or apple-ads date presets) and a stated geo, not a single SERP sighting",
+        "A cac.py output (JSON or verdict.md) exists showing the conservative/base/optimistic CAC band, and no LTV, LTV:CAC ratio, or worth-it verdict word (STRONG/PROMISING/LONG-SHOT/FAILS) appears anywhere in the lab",
+        "report.md exists with: a ranked recommendation naming a precise variant (WHO+WEDGE at minimum), an assumptions register, a dead-corridors section, total spend within the stated budget, and a confirmation test with a numeric go/no-go line",
+        "report.md and the chat summary state the CAC band in plain terms, what the first 100 customers cost, and how many months of retention repay CAC at an observed (P8-anchored) price",
+        "report.md explicitly hands the worth-it judgement to the user and gives an options menu (at least three options, each carrying the number that changes if it is chosen), rather than declaring the economics good or bad",
+        "No node is pruned or refuted for having a high CAC or CPC unless the user themselves named a CAC ceiling",
+        "Any VALIDATED claim in report.md cites at least 2 distinct signal families with numbers and geo",
+        "Each hypothesis card leads with an explanation section containing numbered premises (X1, X2, ...), and its thresholds/kill criteria reference the premises they test",
+        "Any cheap-acquisition claim in report.md compares two measured numbers and includes a persistence explanation (why the gap exists and has not been competed away)",
+        "No fabricated metrics: every volume/CPC/rating number in report.md traces to a banked data file or is labeled as an assumption in the register"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "is there underpriced demand for an ai receptionist for dental clinics in the US? i keep hearing mixed things. set up the idea maze around it and at least run your cheap probe phase with real data, then tell me if the deep dive is worth it. keep data spend under $0.35 for now",
+      "expected_output": "A lab with a maze decomposing the idea (solo vs group practices, missed-call recovery vs scheduling vs insurance verification wedges, etc.), one batched search-volume probe plus 1-3 cheap probes, demand scores on every node, an honest recommendation on whether Phase 3+ is worth the spend, and total ledger under $1.",
+      "files": [],
+      "assertions": [
+        "maze.json exists with 8+ nodes spanning at least 3 distinct wedges or personas, each with a prior demand score and rationale",
+        "Keyword clusters trace to harvested sources (a for-site competitor footprint, SERP phrasings, or ad copy) rather than solely to invented terms",
+        "Every root node has a measured (not just prior) demand score after the probe phase, recorded via node history",
+        "The ledger in maze.json totals under $1.00 and every entry has a note explaining what was bought",
+        "The final chat response states whether to proceed to hypothesis/experiment phases and names the specific top nodes with their measured cluster volumes and CPCs",
+        "B2B calibration was applied: volume thresholds were not naively compared against B2C defaults, or the report explicitly notes the B2B adjustment"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "My cofounder and I are stuck between two directions for our AI follow-up assistant: real-estate agents vs wedding photographers. Same product roughly \u2014 it drafts personalized client follow-ups from call/meeting context. Which market has better demand economics? Use your forecasting system and give us the numbers, not vibes. Keep data spend under $0.55.",
+      "expected_output": "One lab whose maze contains both directions as sibling branches measured with the same instruments and thresholds, a side-by-side CAC comparison (cluster volume, CPC, CAC band, repay months at observed prices, reachable ceiling per branch), a recommendation with the deciding numbers presented as the user's call plus options, and the confirmation test for the recommended branch.",
+      "files": [],
+      "assertions": [
+        "Both directions appear as maze branches and were measured with the same pre-registered thresholds (same bar, same geo) rather than ad-hoc different criteria",
+        "A side-by-side comparison exists showing per-branch cluster volume, CPC, CAC band, and months-to-repay at an observed price, from cac.py runs",
+        "The comparison contains no LTV, no LTV:CAC ratio, and no verdict word grading whether either branch's economics are good enough",
+        "The recommendation names a favourite or an explicit tie, cites the deciding metric gap numerically, states that the final call is the founders', and offers options they can pick from",
+        "Price points for each branch are anchored to observed competitor pricing (P8) named in the assumptions register, not guessed",
+        "A confirmation test with numeric go/no-go is specified for the recommended branch"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,722 @@
+{
+  "_comment": "A finished manifest for a real-shaped study. This is the tone reference as much as the schema reference: notice that every string is short enough to read at a glance, no field contains a paragraph, and every number traces to a row in clean/. Build it with: make_demo.py --out /tmp/pos-demo && charts.py --run /tmp/pos-demo && build_pdf.py --run /tmp/pos-demo",
+  "product": {
+    "name": "Trailhead",
+    "url": "https://trailhead.example.com",
+    "domain": "trailhead.example.com",
+    "one_liner": "Field service scheduling for teams that dispatch to homes",
+    "date": "2026-08-23",
+    "geo": "United States / English"
+  },
+  "statement": "For residential HVAC contractors running 5–40 trucks, Trailhead is the dispatch board that keeps the schedule intact when a job runs long — it reshuffles the day automatically and texts every affected homeowner, which the generic field-service suites leave to whoever answers the phone.",
+  "key_numbers": [
+    {
+      "value": "3",
+      "label": "capabilities only you have",
+      "note": "of 14 compared"
+    },
+    {
+      "value": "27k",
+      "label": "monthly searches in the frame you should own",
+      "note": "\"hvac dispatch software\" cluster"
+    },
+    {
+      "value": "9",
+      "label": "true alternatives",
+      "note": "4 of them are not software"
+    },
+    {
+      "value": "$18",
+      "label": "what a click costs in this category",
+      "note": "median top-of-page bid"
+    }
+  ],
+  "answer": {
+    "frame": {
+      "name": "HVAC dispatch software",
+      "why": "27k searches a month and only two entrenched players, versus 210k in \"field service management\" where nine suites already own the term and your three unique capabilities read as line items."
+    },
+    "segment": {
+      "name": "Residential HVAC, 5–40 trucks",
+      "why": "Scores 19 of 20 on the things you are best at — they lose a full job every time a schedule slips, and they have no dispatcher on staff to absorb it."
+    },
+    "wedge": {
+      "name": "Automatic reshuffle when a job runs long",
+      "why": "None of the nine alternatives do this without a human. It is the moment the day actually breaks."
+    }
+  },
+  "segments": [
+    {
+      "name": "Residential HVAC, 5–40 trucks",
+      "evidence_types": {
+        "reviews": 41,
+        "case_studies": 6,
+        "logo_wall": 12,
+        "job_posts": 4
+      },
+      "why_they_love": "the day repairs itself when a call runs long",
+      "fit_score": 19
+    },
+    {
+      "name": "Plumbing, 10–50 trucks",
+      "evidence_types": {
+        "reviews": 22,
+        "case_studies": 3,
+        "logo_wall": 7,
+        "job_posts": 1
+      },
+      "why_they_love": "emergency calls stop wrecking the schedule",
+      "fit_score": 16
+    },
+    {
+      "name": "Electrical contractors",
+      "evidence_types": {
+        "reviews": 14,
+        "case_studies": 2,
+        "logo_wall": 5
+      },
+      "why_they_love": "permit-dependent jobs get sequenced right",
+      "fit_score": 12
+    },
+    {
+      "name": "Commercial facilities teams",
+      "evidence_types": {
+        "reviews": 9,
+        "case_studies": 4,
+        "logo_wall": 9
+      },
+      "why_they_love": "SLA clocks are visible on the board",
+      "fit_score": 9
+    },
+    {
+      "name": "Landscaping crews",
+      "evidence_types": {
+        "reviews": 6,
+        "logo_wall": 3
+      },
+      "why_they_love": "weather reshuffles the week in one click",
+      "fit_score": 6
+    }
+  ],
+  "vocabulary": [
+    {
+      "yours": "service orchestration",
+      "theirs": "dispatch software",
+      "your_volume": 260,
+      "their_volume": 14800,
+      "note": "your own category word has almost no demand behind it"
+    },
+    {
+      "yours": "technician utilisation",
+      "theirs": "scheduling software",
+      "your_volume": 590,
+      "their_volume": 33100,
+      "note": ""
+    },
+    {
+      "yours": "route intelligence",
+      "theirs": "route planner",
+      "your_volume": 480,
+      "their_volume": 22200,
+      "note": ""
+    },
+    {
+      "yours": "customer comms",
+      "theirs": "appointment reminder",
+      "your_volume": 1300,
+      "their_volume": 8100,
+      "note": ""
+    },
+    {
+      "yours": "field ops platform",
+      "theirs": "field service software",
+      "your_volume": 390,
+      "their_volume": 40500,
+      "note": ""
+    },
+    {
+      "yours": "job lifecycle",
+      "theirs": "work order software",
+      "your_volume": 210,
+      "their_volume": 12100,
+      "note": ""
+    },
+    {
+      "yours": "capacity planning",
+      "theirs": "crew scheduling",
+      "your_volume": 720,
+      "their_volume": 6600,
+      "note": ""
+    }
+  ],
+  "alternatives": [
+    {
+      "name": "ServiceTitan",
+      "lane": "direct",
+      "volume": 60500,
+      "domain": "servicetitan.com",
+      "note": "the category default for big shops"
+    },
+    {
+      "name": "Housecall Pro",
+      "lane": "direct",
+      "volume": 33100,
+      "domain": "housecallpro.com",
+      "note": "wins on price below 10 trucks"
+    },
+    {
+      "name": "Jobber",
+      "lane": "direct",
+      "volume": 27100,
+      "domain": "getjobber.com",
+      "note": ""
+    },
+    {
+      "name": "Salesforce Field Service",
+      "lane": "adjacent",
+      "volume": 18100,
+      "domain": "salesforce.com",
+      "note": "arrives through an existing CRM deal"
+    },
+    {
+      "name": "Google Calendar + texts",
+      "lane": "adjacent",
+      "volume": 9900,
+      "domain": "",
+      "note": ""
+    },
+    {
+      "name": "Excel dispatch board",
+      "lane": "diy",
+      "volume": 8100,
+      "domain": "",
+      "note": "still the most common system at 10 trucks"
+    },
+    {
+      "name": "Whiteboard in the shop",
+      "lane": "diy",
+      "volume": 2400,
+      "domain": "",
+      "note": ""
+    },
+    {
+      "name": "Owner does it from a truck",
+      "lane": "nothing",
+      "volume": 4400,
+      "domain": "",
+      "note": "the real incumbent under 15 trucks"
+    },
+    {
+      "name": "Hire a dispatcher",
+      "lane": "nothing",
+      "volume": 6600,
+      "domain": "",
+      "note": "$52k/yr — this is the budget you compete for"
+    }
+  ],
+  "attributes": [
+    {
+      "name": "Auto-reshuffle when a job overruns",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": false,
+        "Housecall Pro": false,
+        "Jobber": false,
+        "Salesforce FS": false,
+        "Excel": false
+      },
+      "verdict": "unique",
+      "evidence": "no rival help centre documents an automatic reshuffle"
+    },
+    {
+      "name": "Texts every affected homeowner",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": false,
+        "Housecall Pro": true,
+        "Jobber": false,
+        "Salesforce FS": false,
+        "Excel": false
+      },
+      "verdict": "unique",
+      "evidence": "housecallpro.com/features — manual send only"
+    },
+    {
+      "name": "Live capacity forecast to end of week",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": false,
+        "Housecall Pro": false,
+        "Jobber": false,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "unique",
+      "evidence": ""
+    },
+    {
+      "name": "Skill-based technician matching",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": false,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "table_stakes",
+      "evidence": ""
+    },
+    {
+      "name": "Drag-and-drop dispatch board",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": true
+      },
+      "verdict": "table_stakes",
+      "evidence": ""
+    },
+    {
+      "name": "Mobile app for technicians",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "table_stakes",
+      "evidence": ""
+    },
+    {
+      "name": "Route optimisation",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "table_stakes",
+      "evidence": ""
+    },
+    {
+      "name": "Invoicing and payments",
+      "you": false,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "gap",
+      "evidence": "every direct rival bundles it; you integrate instead"
+    },
+    {
+      "name": "QuickBooks sync",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": false,
+        "Excel": false
+      },
+      "verdict": "table_stakes",
+      "evidence": ""
+    },
+    {
+      "name": "Customer portal",
+      "you": false,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "gap",
+      "evidence": ""
+    },
+    {
+      "name": "Inventory tracking",
+      "you": false,
+      "competitors": {
+        "ServiceTitan": true,
+        "Housecall Pro": false,
+        "Jobber": true,
+        "Salesforce FS": true,
+        "Excel": false
+      },
+      "verdict": "gap",
+      "evidence": ""
+    },
+    {
+      "name": "Sets up in an afternoon",
+      "you": true,
+      "competitors": {
+        "ServiceTitan": false,
+        "Housecall Pro": true,
+        "Jobber": true,
+        "Salesforce FS": false,
+        "Excel": true
+      },
+      "verdict": "table_stakes",
+      "evidence": ""
+    }
+  ],
+  "value_flow": {
+    "attributes": [
+      "Auto-reshuffle when a job overruns",
+      "Texts every affected homeowner",
+      "Live capacity forecast",
+      "Skill-based matching"
+    ],
+    "benefits": [
+      "The day survives an overrun",
+      "Nobody phones to ask where the tech is",
+      "You can promise a slot and mean it",
+      "Right tech on the right job"
+    ],
+    "themes": [
+      "Finish the day you sold",
+      "Stop losing the callback",
+      "Sell capacity you can keep"
+    ],
+    "links": [
+      {
+        "from": "Auto-reshuffle when a job overruns",
+        "to": "The day survives an overrun",
+        "weight": 5
+      },
+      {
+        "from": "Auto-reshuffle when a job overruns",
+        "to": "You can promise a slot and mean it",
+        "weight": 2
+      },
+      {
+        "from": "Texts every affected homeowner",
+        "to": "Nobody phones to ask where the tech is",
+        "weight": 4
+      },
+      {
+        "from": "Live capacity forecast",
+        "to": "You can promise a slot and mean it",
+        "weight": 4
+      },
+      {
+        "from": "Skill-based matching",
+        "to": "Right tech on the right job",
+        "weight": 3
+      },
+      {
+        "from": "The day survives an overrun",
+        "to": "Finish the day you sold",
+        "weight": 5
+      },
+      {
+        "from": "Nobody phones to ask where the tech is",
+        "to": "Stop losing the callback",
+        "weight": 4
+      },
+      {
+        "from": "You can promise a slot and mean it",
+        "to": "Sell capacity you can keep",
+        "weight": 4
+      },
+      {
+        "from": "Right tech on the right job",
+        "to": "Finish the day you sold",
+        "weight": 3
+      }
+    ]
+  },
+  "segment_value": {
+    "segments": [
+      "Residential HVAC, 5–40 trucks",
+      "Plumbing, 10–50 trucks",
+      "Electrical contractors",
+      "Commercial facilities teams",
+      "Landscaping crews"
+    ],
+    "themes": [
+      "Finish the day you sold",
+      "Stop losing the callback",
+      "Sell capacity you can keep",
+      "Right tech on the right job"
+    ],
+    "scores": [
+      [
+        5,
+        5,
+        5,
+        4
+      ],
+      [
+        5,
+        4,
+        4,
+        3
+      ],
+      [
+        3,
+        3,
+        4,
+        2
+      ],
+      [
+        2,
+        2,
+        3,
+        2
+      ],
+      [
+        2,
+        1,
+        2,
+        1
+      ]
+    ]
+  },
+  "frames": [
+    {
+      "name": "HVAC dispatch software",
+      "demand": 27100,
+      "favorability": 86,
+      "density": 2,
+      "cpc": 18.4,
+      "recommended": true
+    },
+    {
+      "name": "Field service management",
+      "demand": 210000,
+      "favorability": 22,
+      "density": 9,
+      "cpc": 24.1,
+      "recommended": false
+    },
+    {
+      "name": "Crew scheduling software",
+      "demand": 33100,
+      "favorability": 41,
+      "density": 6,
+      "cpc": 11.2,
+      "recommended": false
+    },
+    {
+      "name": "Route planning software",
+      "demand": 22200,
+      "favorability": 28,
+      "density": 7,
+      "cpc": 9.8,
+      "recommended": false
+    },
+    {
+      "name": "Appointment reminder software",
+      "demand": 8100,
+      "favorability": 63,
+      "density": 4,
+      "cpc": 6.4,
+      "recommended": false
+    },
+    {
+      "name": "Home services operating system",
+      "demand": 720,
+      "favorability": 78,
+      "density": 1,
+      "cpc": 14.0,
+      "recommended": false
+    }
+  ],
+  "messaging_crowding": [
+    {
+      "theme": "The day repairs itself after an overrun",
+      "claimed_by": [],
+      "you": true
+    },
+    {
+      "theme": "Promise a two-hour window and keep it",
+      "claimed_by": [
+        "Housecall Pro"
+      ],
+      "you": true
+    },
+    {
+      "theme": "No dispatcher required",
+      "claimed_by": [],
+      "you": true
+    },
+    {
+      "theme": "Grow your business",
+      "claimed_by": [
+        "ServiceTitan",
+        "Housecall Pro",
+        "Jobber",
+        "Salesforce FS"
+      ],
+      "you": false
+    },
+    {
+      "theme": "All-in-one platform",
+      "claimed_by": [
+        "ServiceTitan",
+        "Housecall Pro",
+        "Jobber",
+        "Salesforce FS"
+      ],
+      "you": false
+    },
+    {
+      "theme": "Get paid faster",
+      "claimed_by": [
+        "ServiceTitan",
+        "Housecall Pro",
+        "Jobber"
+      ],
+      "you": false
+    },
+    {
+      "theme": "Loved by 100,000 pros",
+      "claimed_by": [
+        "Housecall Pro",
+        "Jobber"
+      ],
+      "you": false
+    },
+    {
+      "theme": "Works offline in the field",
+      "claimed_by": [
+        "ServiceTitan"
+      ],
+      "you": true
+    }
+  ],
+  "canvas": {
+    "alternatives": [
+      "ServiceTitan / Housecall Pro / Jobber",
+      "An Excel dispatch board",
+      "The owner dispatching from a truck",
+      "Hiring a $52k dispatcher"
+    ],
+    "attributes": [
+      "Auto-reshuffle when a job overruns",
+      "Texts every affected homeowner automatically",
+      "Live capacity forecast to end of week"
+    ],
+    "value": [
+      "Finish the day you sold",
+      "Stop losing the callback",
+      "Sell capacity you can actually keep"
+    ],
+    "segments": [
+      "Residential HVAC, 5–40 trucks",
+      "Plumbing, 10–50 trucks"
+    ],
+    "frame": "HVAC dispatch software",
+    "trend": "Homeowners now expect an Uber-style arrival window — not a four-hour one"
+  },
+  "sales_story": [
+    {
+      "beat": "The change",
+      "line": "Homeowners started expecting a two-hour arrival window, and then a text when it moves."
+    },
+    {
+      "beat": "What it broke",
+      "line": "One overrunning job now costs you the rest of the day's bookings and a callback you never get."
+    },
+    {
+      "beat": "The old fix",
+      "line": "Somebody has to sit on the phone and rebuild the board by hand — a dispatcher, or the owner at 6pm."
+    },
+    {
+      "beat": "Why that fails",
+      "line": "The suites you can buy all assume that person exists. Under 40 trucks, they don't."
+    },
+    {
+      "beat": "The new way",
+      "line": "The board reshuffles itself the moment a job runs long, and every affected homeowner already knows."
+    }
+  ],
+  "messages": [
+    {
+      "audience": "Residential HVAC owner, 5–40 trucks",
+      "line": "When a job runs long, the rest of your day fixes itself.",
+      "proof": "Auto-reshuffle — no rival does it without a human"
+    },
+    {
+      "audience": "The office manager",
+      "line": "Nobody calls to ask where the technician is.",
+      "proof": "Every affected homeowner is texted automatically"
+    },
+    {
+      "audience": "The owner weighing a $52k dispatcher",
+      "line": "Book the capacity, not the headcount.",
+      "proof": "Live forecast to end of week"
+    }
+  ],
+  "appendix_tables": [
+    {
+      "title": "Every alternative, and how it was found",
+      "csv": "clean/alternatives.csv",
+      "columns": [
+        "name",
+        "lane",
+        "domain",
+        "volume",
+        "cpc",
+        "via"
+      ]
+    },
+    {
+      "title": "The capability comparison in full",
+      "csv": "clean/attributes.csv",
+      "columns": [
+        "attribute",
+        "you",
+        "verdict",
+        "evidence"
+      ]
+    },
+    {
+      "title": "What the market actually searches for",
+      "csv": "clean/keywords.csv",
+      "columns": [
+        "keyword",
+        "search_volume",
+        "cpc",
+        "frame"
+      ]
+    }
+  ],
+  "sources": [
+    {
+      "what": "Product and competitor marketing pages",
+      "where": "24 pages fetched 2026-08-23"
+    },
+    {
+      "what": "Search volumes and click prices",
+      "where": "Google Ads keyword data, United States, past 12 months"
+    },
+    {
+      "what": "Customer evidence",
+      "where": "review sites, case studies and logo walls named in the appendix"
+    }
+  ],
+  "notes": {
+    "customers_note": "The people who write the warmest reviews all run the same shape of business — 5 to 40 trucks, no dispatcher on staff.",
+    "vocabulary_note": "Nobody is searching for the words on your homepage. \"Dispatch software\" alone is 57x the demand of \"service orchestration\".",
+    "alternatives_note": "Four of your nine alternatives are not software. The one you lose most often to costs $52k a year and answers the phone.",
+    "attributes_note": "Seven of the twelve things your site leads with are true of everyone selling here. Three are not.",
+    "value_note": "Every theme traces back to the same capability. If a rival ships auto-reshuffle, two of your three value themes go with it.",
+    "segments_note": "Landscaping scores 6 of 20. Selling to them costs the same as selling to HVAC and returns a third as much.",
+    "frame_note": "\"Field service management\" is eight times the demand and the category you would enter last. Nine suites already answer to that name.",
+    "messaging_note": "Your three strongest claims are uncontested. Every claim you share with a rival is one you can stop making."
+  }
+}

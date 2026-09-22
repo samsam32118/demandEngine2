@@ -1,0 +1,174 @@
+{
+  "cases": [
+    {
+      "file": "01-search-text-ad.png",
+      "headline": "Free CRM Software For Small Teams",
+      "description": "Track every deal in one pipeline. No credit card, no seat limits, free forever.",
+      "cta": "Get Started Free",
+      "other": [
+        "hubspot.com/crm/free"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "02-search-sitelinks.png",
+      "headline": "Start Your Online Store Today",
+      "description": "Everything you need to sell online, in person and on social. 3 day free trial then $1 a month.",
+      "cta": "",
+      "other": [
+        "shopify.com"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "03-banner-300x250.png",
+      "headline": "Sleep Cooler All Summer",
+      "description": "Cooling mattress with 100 night risk free trial.",
+      "cta": "Shop Now",
+      "other": [
+        "From $899 \u00b7 sleepcool.com"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "04-leaderboard-728x90.png",
+      "headline": "Business Insurance From $29 A Month",
+      "description": "Get a quote in under three minutes.",
+      "cta": "Get Quote",
+      "other": [
+        "ACME"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "05-skyscraper-160x600.png",
+      "headline": "Learn Spanish Fast",
+      "description": "Ten minutes a day is enough.",
+      "cta": "Try Free",
+      "other": [
+        "lingoapp.com"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "06-social-square.png",
+      "headline": "Your Kitchen, Renovated In A Week",
+      "description": "Fixed price quotes from vetted local fitters.",
+      "cta": "Book A Visit",
+      "other": [],
+      "verdict": "ok"
+    },
+    {
+      "file": "07-app-install.png",
+      "headline": "FitPlan Workouts",
+      "description": "Personal training plans that adapt to the equipment you own.",
+      "cta": "Install",
+      "other": [
+        "4.8 stars \u00b7 120K ratings"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "08-allcaps-fineprint.png",
+      "headline": "BLACK FRIDAY",
+      "description": "Every frame, every lens, both pairs. Ends Monday night.",
+      "cta": "Shop The Sale",
+      "other": [
+        "Terms apply. Excludes prescription sunglasses."
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "09-no-cta.png",
+      "headline": "Solar Panels Paid Monthly",
+      "description": "No upfront cost. Average household saves 1,100 pounds a year on bills.",
+      "cta": "",
+      "other": [
+        "brightroof.co.uk"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "10-two-ctas.png",
+      "headline": "New Season Running Shoes",
+      "description": "Carbon plate racers and daily trainers, in stock.",
+      "cta": "Shop Men",
+      "other": [
+        "Shop Women"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "11-price-hero.png",
+      "headline": "$149",
+      "description": "One way from Boston, October dates.",
+      "cta": "See Dates",
+      "other": [
+        "Flights To Lisbon"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "12-url-on-top.png",
+      "headline": "Emergency Plumber Near You",
+      "description": "Burst pipe? We are 30 minutes away, 24 hours a day.",
+      "cta": "Call Now",
+      "other": [
+        "www.leakfixers.com/emergency"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "13-low-contrast.png",
+      "headline": "Minimalist Watches",
+      "description": "Swiss movement, sapphire glass, under 200 dollars.",
+      "cta": "View Collection",
+      "other": [],
+      "verdict": "ok"
+    },
+    {
+      "file": "14-serif.png",
+      "headline": "The Wine Club For Curious Drinkers",
+      "description": "Six bottles a month, chosen by a real sommelier.",
+      "cta": "Join Now",
+      "other": [
+        "cellarclub.com"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "15-photo-overlay.png",
+      "headline": "Hike More, Carry Less",
+      "description": "34 litre pack, 890 grams, lifetime warranty.",
+      "cta": "Shop Packs",
+      "other": [],
+      "verdict": "ok"
+    },
+    {
+      "file": "16-video-thumb.png",
+      "headline": "How Founders Hire Their First Salesperson",
+      "description": "",
+      "cta": "",
+      "other": [
+        "Watch the 6 minute guide \u00b7 closedeal.io"
+      ],
+      "verdict": "ok"
+    },
+    {
+      "file": "17-photo-only.png",
+      "headline": "",
+      "description": "",
+      "cta": "",
+      "other": [],
+      "verdict": "no_text"
+    },
+    {
+      "file": "18-tiny-type.png",
+      "headline": "Cheap Van Insurance",
+      "description": "Compare 40 insurers in one search. Average saving 218 pounds.",
+      "cta": "Compare Now",
+      "other": [],
+      "verdict": "ok"
+    }
+  ]
+}

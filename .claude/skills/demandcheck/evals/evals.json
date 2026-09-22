@@ -1,0 +1,21 @@
+{
+  "skill": "demandcheck",
+  "evals": [
+    {
+      "id": "cold-plunge-shape",
+      "prompt": "Is there real demand for portable cold plunge tubs, and is it direct or latent? Run a demandcheck with a $5 budget — I want the PDF."
+    },
+    {
+      "id": "dental-ai-capture",
+      "prompt": "demandcheck: AI receptionist for dental clinics. How does the demand show up, who's capturing it, and what messaging is working? Budget $8, go deep."
+    },
+    {
+      "id": "sauna-blanket-refutation",
+      "prompt": "demandcheck sauna blankets, $5. I'm fairly sure this is a fad with no real search demand behind it — tell me if I'm wrong, and be clear about what your method can't see."
+    },
+    {
+      "id": "diabetic-meal-kits-vague",
+      "prompt": "I think busy parents of diabetic kids want specialized meal kits. Check whether that demand actually exists, what form it takes, and what the ads in that space say."
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "skill_name": "email-guesser",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Find the email pattern for anthropic.com",
+      "expected_output": "JSON with domain=anthropic.com, a non-empty inferred_patterns list (or a principled low-evidence fallback), and no guesses array (no name supplied).",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `anthropic.com`",
+        "`inferred_patterns` is a list with at least one entry",
+        "`guesses` is an empty list (no first/last provided)",
+        "`discovered_emails` field exists"
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Guess Jane Doe's email at stripe.com",
+      "expected_output": "JSON with domain=stripe.com, name.first=Jane, name.last=Doe, guesses array with 1-3 candidates. Top guess most commonly `jane.doe@stripe.com` (the global prior) but may reflect discovered evidence.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `stripe.com`",
+        "`name.first` equals `Jane`",
+        "`name.last` equals `Doe`",
+        "`guesses` has at least one entry",
+        "Every guess email ends with `@stripe.com`",
+        "Every guess has a `confidence` field matching one of: high, medium, low — no evidence"
+      ]
+    },
+    {
+      "id": 3,
+      "prompt": "What's the email for Pat Smith at some-tiny-co-xyz.example",
+      "expected_output": "JSON with cold-domain fallback — no evidence discovered, 3 prior-based guesses, pat.smith@some-tiny-co-xyz.example first.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`discovered_emails` is an empty list OR all entries have source_type=serp and confidence is low",
+        "`guesses` contains exactly 3 entries",
+        "First guess email is `pat.smith@some-tiny-co-xyz.example`",
+        "Every guess confidence equals `low — no evidence`"
+      ]
+    },
+    {
+      "id": 4,
+      "prompt": "Find the email pattern for main.nl (Main Capital Partners)",
+      "expected_output": "JSON showing a high-confidence pattern from the RocketReach aggregator snippet. Regression case: aggregator signal must still promote to `high` when share-% >= 60.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `main.nl`",
+        "`aggregator_hits` is a list with at least one entry",
+        "At least one entry in `inferred_patterns` has confidence `high`",
+        "The top-ranked pattern (first in `inferred_patterns`) is `{first}`"
+      ]
+    },
+    {
+      "id": 5,
+      "prompt": "Find the email pattern for arcadeagroup.com",
+      "expected_output": "JSON showing pattern inference with the sentinel-placeholder blacklist in effect. Regression case: `last@arcadeagroup.com` is a LeadIQ pattern-example placeholder and must NOT appear in discovered_emails.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `arcadeagroup.com`",
+        "No entry in `discovered_emails` has email equal to `last@arcadeagroup.com`",
+        "No entry in `discovered_emails` has email equal to `first@arcadeagroup.com`",
+        "No entry in `discovered_emails` has email equal to `firstlast@arcadeagroup.com`",
+        "At least one inferred pattern has confidence `medium` or `high`"
+      ]
+    },
+    {
+      "id": 6,
+      "prompt": "Find the email pattern for tributetech.com",
+      "expected_output": "JSON showing pattern inference with the expanded ROLE_LOCALS filter in effect. Regression case: `websites@tributetech.com` is a role account, not a named employee.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `tributetech.com`",
+        "If `websites@tributetech.com` appears in `discovered_emails`, its `role_account` field is true",
+        "If `accounting@tributetech.com` appears in `discovered_emails`, its `role_account` field is true",
+        "At least one inferred pattern has confidence `medium` or `high`"
+      ]
+    },
+    {
+      "id": 7,
+      "prompt": "Find the email pattern for vistaequitypartners.com",
+      "expected_output": "JSON showing pattern inference using bare-word split credit. Regression case: domains where all harvested named emails are bare words (no `.`, `-`, or `_`) should still score via 0.5/0.5 split credit between `{first}` and `{last}`.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `vistaequitypartners.com`",
+        "`inferred_patterns` has at least one entry with confidence `medium` OR `high`",
+        "The top-ranked pattern is one of `{first}`, `{last}`, or `{first}.{last}`"
+      ]
+    },
+    {
+      "id": 8,
+      "prompt": "Guess Jonathan Chen's email at arcadeagroup.com",
+      "expected_output": "JSON with guesses rendered from canonicalized name. Regression case: name-seeded SERP queries should augment evidence but must not be cached under the domain-only key.",
+      "files": [],
+      "expectations": [
+        "Output is valid JSON",
+        "`domain` field equals `arcadeagroup.com`",
+        "`name.first` equals `Jonathan`",
+        "`name.last` equals `Chen`",
+        "`guesses` has at least one entry",
+        "Every guess email ends with `@arcadeagroup.com`",
+        "Every guess email contains `jonathan` or `chen` or `j` (rendered from the canonicalized name, not the literal sentinels `first`/`last`)"
+      ]
+    }
+  ]
+}

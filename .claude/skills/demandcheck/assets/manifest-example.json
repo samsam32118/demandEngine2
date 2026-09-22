@@ -1,0 +1,460 @@
+{
+  "_about": "A COMPLETE worked example of report-manifest.json in the block schema (references/report-spec.md). It is the filled-in twin of the scaffold that make_manifest.py writes, and it is written against the synthetic run produced by assets/report-selftest/make_demo_run.py — invented brands, invented numbers, nothing scraped. Copy it over that demo run's report-manifest.json to render a finished sample report. Read it for tone: findings stated in the strongest form the data supports, numbers inside sentences, ad copy quoted verbatim with its run length, and nothing anywhere about how the work was done. Delete this key in a real manifest.",
+  "title": "DemandCheck: cold plunge tubs",
+  "seed": "cold plunge tub",
+  "geo": "US (en)",
+  "date": "2026-08-15",
+  "verdict_line": "The demand is real and already priced: about 124,000 people a month search to buy, four brands hold that ground at $1.80 a click — and a pool four times larger sits beside it at a quarter of the price with nobody selling into it.",
+  "key_numbers": [
+    {
+      "value": "343,340",
+      "label": "searches a month",
+      "note": "across 28 measured search terms"
+    },
+    {
+      "value": "$1.05",
+      "label": "typical price per click",
+      "note": "range $0.18 to $3.80"
+    },
+    {
+      "value": "4",
+      "label": "companies buying ads here",
+      "note": "28 ads running between them"
+    },
+    {
+      "value": "412 days",
+      "label": "longest-running ad",
+      "note": "Northwind Recovery — 17 ads have run 90+ days"
+    }
+  ],
+  "key_terms": {
+    "limit": 15
+  },
+  "summary_deck": "The verdict, the numbers behind it, and the opening nobody is taking.",
+  "executive_summary": [
+    "People are actively shopping for cold plunge tubs. The product's own search terms carry about 124,300 searches a month in the US, and advertisers pay roughly $1.80 for each click on them. Four companies — Northwind Recovery, Barrel & Co, Tundra Home and Coldwell Labs — run all 28 ads in the market, and 17 of those ads have been live for more than three months. Advertisers cut ads that lose money within weeks, so an ad that survives a season is an ad that pays for itself.",
+    "The larger audience sits next door and is unclaimed. Searches about the practice rather than the product — ice baths, cold exposure, do-it-yourself setups — total about 158,400 a month, cost about a quarter as much per click, and carry no product advertising at all. Publishers answer those searches today.",
+    "What the surviving ads say is narrower than what the market searches for. Every ad still running after a year leads on recovery and routine — “Recover Like A Pro Athlete” (Northwind Recovery, live 412 days) — while the phrasings searchers use most, like “cold plunge before or after workout” (8,100 searches a month), appear in none of the 28 ads."
+  ],
+  "highlights": [
+    {
+      "variant": "takeaway",
+      "title": "The finding that matters most",
+      "text": "The cheap half of this market is four times bigger than the expensive half: 158,400 monthly searches at about $0.24 a click, against 124,280 at $1.80."
+    },
+    {
+      "variant": "good-news",
+      "title": "What is working",
+      "text": "Recovery framing outlasts everything else. Of the 17 ads live past 90 days, the wording is about training and routine, not about cold — “The Routine Athletes Keep” has been running for 412 days."
+    },
+    {
+      "variant": "watch-out",
+      "title": "What would give you trouble",
+      "text": "All four advertisers rank on the first page organically as well as buying ads, so paid entry means paying the $1.80 click price against companies that also collect the free traffic."
+    }
+  ],
+  "chapters": [
+    {
+      "heading": "Is there demand, and what shape is it?",
+      "kicker": "Chapter 1",
+      "takeaway": "Yes — and it comes in two very different sizes at two very different prices.",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "lead": true,
+          "text": "There is nothing hypothetical about this market: 28 search terms carry about 343,300 searches a month between them, and almost all of them have a live ad auction attached — real companies are paying real money to answer them today."
+        },
+        {
+          "type": "paragraph",
+          "text": "The demand splits into two halves that behave nothing alike. People typing the product's own name — “cold plunge tub”, “ice bath tub”, “cold plunge chiller” — are 10 terms and about 124,300 searches a month, and reaching them costs about $1.80 a click. People searching the practice instead — “ice bath benefits” at 60,500 searches a month, “wim hof method” at 33,100 — are the bigger audience, 158,400 searches a month, at a quarter of the price."
+        },
+        {
+          "type": "table",
+          "title": "The demand mix, measured",
+          "columns": [
+            "kind of demand",
+            "search terms",
+            "searches per month",
+            "typical price per click"
+          ],
+          "rows": [
+            [
+              "direct",
+              "10",
+              "124,280",
+              "$1.80"
+            ],
+            [
+              "indirect",
+              "4",
+              "57,800",
+              "$1.04"
+            ],
+            [
+              "latent",
+              "9",
+              "158,400",
+              "$0.24"
+            ],
+            [
+              "urgent",
+              "3",
+              "670",
+              "$3.40"
+            ],
+            [
+              "unclear",
+              "2",
+              "2,190",
+              "$1.05"
+            ]
+          ],
+          "note": "“Typical” is the middle value, so one unusual term cannot drag it."
+        },
+        {
+          "type": "chart",
+          "file": "demand_mix.png",
+          "caption": "The tall green bar is people searching about cold exposure as a practice; the blue one is people shopping for a tub. The practice audience is the larger of the two."
+        },
+        {
+          "type": "chart",
+          "file": "demand_map.png",
+          "caption": "Every dot is one search term, placed by how often it is searched (across) and what a click costs (up). The bottom right — big audience, cheap clicks — is the corner worth staring at."
+        },
+        {
+          "type": "callout",
+          "variant": "plain",
+          "title": "In plain English",
+          "text": "Two groups of people are searching here. One already wants a tub and is expensive to reach because four companies bid for them. The other is curious about cold water and is cheap to reach because nobody selling tubs is bidding at all."
+        }
+      ]
+    },
+    {
+      "heading": "How it shows up, and who captures it",
+      "kicker": "Chapter 2",
+      "takeaway": "Four brands hold the shopping half completely. Nobody holds the curious half.",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "lead": true,
+          "text": "On the product terms the ground is taken. Northwind Recovery, Barrel & Co, Tundra Home and Coldwell Labs each run seven ads, all four appear on the first page of Google's results as well, and between them they hold every paid position on “cold plunge tub”."
+        },
+        {
+          "type": "table",
+          "title": "Who is advertising here, and how hard",
+          "columns": [
+            "advertiser",
+            "ads found",
+            "still running",
+            "longest ad (days)"
+          ],
+          "rows": [
+            [
+              "Northwind Recovery",
+              "7",
+              "5",
+              "412"
+            ],
+            [
+              "Barrel & Co",
+              "7",
+              "5",
+              "340"
+            ],
+            [
+              "Tundra Home",
+              "7",
+              "5",
+              "412"
+            ],
+            [
+              "Coldwell Labs",
+              "7",
+              "7",
+              "412"
+            ]
+          ],
+          "note": "An ad that has run for months is an ad that pays for itself — advertisers cut losing ads in weeks."
+        },
+        {
+          "type": "chart",
+          "file": "capture_leaders.png",
+          "caption": "No single brand dominates: spend is spread evenly across four companies, which usually means none of them has found a decisive advantage yet."
+        },
+        {
+          "type": "paragraph",
+          "text": "On the practice terms the picture inverts. Not one of the four advertisers appears against “ice bath benefits” (60,500 searches a month) or “diy cold plunge” (14,800). Those results belong to publishers and to YouTube, and the click price sits between $0.18 and $0.33 precisely because nobody is bidding against them."
+        },
+        {
+          "type": "table",
+          "title": "Big audiences almost nobody is paying for",
+          "columns": [
+            "search term",
+            "searches per month",
+            "price per click"
+          ],
+          "rows": [
+            [
+              "ice bath benefits",
+              "60,500",
+              "$0.31"
+            ],
+            [
+              "wim hof method",
+              "33,100",
+              "$0.26"
+            ],
+            [
+              "cold exposure therapy",
+              "18,100",
+              "$0.28"
+            ],
+            [
+              "diy cold plunge",
+              "14,800",
+              "$0.24"
+            ],
+            [
+              "cold plunge benefits for men",
+              "9,900",
+              "$0.33"
+            ],
+            [
+              "cold plunge before or after workout",
+              "8,100",
+              "$0.19"
+            ]
+          ],
+          "note": "Cheap clicks are not automatically good clicks — these searchers are earlier in their thinking, and buying intent is not visible on the term itself."
+        },
+        {
+          "type": "chart",
+          "file": "latent_gap.png",
+          "caption": "The ten largest audiences that currently carry almost no advertising."
+        },
+        {
+          "type": "chart",
+          "file": "seasonality.png",
+          "caption": "Interest climbs every December and January and falls through the summer, so timing a launch matters as much as the message."
+        },
+        {
+          "type": "callout",
+          "variant": "takeaway",
+          "text": "About 158,400 searches a month are answered by publishers rather than by anyone who sells a tub. That is the opening in this market as it stands today."
+        }
+      ]
+    },
+    {
+      "heading": "How this market talks — and what is earning its keep",
+      "kicker": "Chapter 3",
+      "takeaway": "The ads that survive sell recovery and routine. Almost none of them sell cold.",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "lead": true,
+          "text": "An advertiser cuts a losing ad within weeks, so the ads still running after a year are the clearest signal this market gives about what converts. Seventeen of the 28 ads have run past 90 days, and they say a remarkably similar thing."
+        },
+        {
+          "type": "quote",
+          "creative_id": "CR7000000148"
+        },
+        {
+          "type": "quote",
+          "creative_id": "CR7000000407"
+        },
+        {
+          "type": "creatives",
+          "ids": [
+            "CR7000000148",
+            "CR7000000407",
+            "CR7000000518",
+            "CR7000000740",
+            "CR7000000851",
+            "CR7000000962"
+          ],
+          "columns": 3,
+          "title": "The ads that have earned their keep",
+          "intro": "Six of the longest-running ads in this market, spread across all four advertisers. Read the headlines together: they are about training, routine and recovery — the tub is the means, never the subject.",
+          "caption": "Each ad is shown exactly as its advertiser runs it, with how long it has been running. The wording under each picture is what the ad itself says."
+        },
+        {
+          "type": "chart",
+          "file": "proven_messaging.png",
+          "caption": "Words that appear in the long-running ads far more often than in the newer ones. “Recovery” and “daily” carry the survivors."
+        },
+        {
+          "type": "chart",
+          "file": "ad_longevity.png",
+          "caption": "Most ads in this market are recent experiments; the green tail on the right is the copy that has been paying for itself for months."
+        },
+        {
+          "type": "paragraph",
+          "text": "The gap between how the market advertises and how it searches is the widest opening in this report. “Cold plunge before or after workout” is searched 8,100 times a month and “how cold should a cold plunge be” 6,600 times; neither phrase, nor anything close to either, appears in any of the 28 ads. Whoever answers those questions first will do it without a bidding war."
+        }
+      ]
+    },
+    {
+      "heading": "What it costs",
+      "kicker": "Chapter 4",
+      "takeaway": "Between $0.18 and $3.80 a click, and the difference is mostly how ready the searcher is to buy.",
+      "blocks": [
+        {
+          "type": "paragraph",
+          "lead": true,
+          "text": "Click prices in this market span more than twentyfold. Product terms sit around $1.80. The three repair-and-emergency terms carry the premium at about $3.40, the usual pattern: somebody whose chiller failed today is worth more than somebody browsing. The practice terms are the cheapest ground on the board at about $0.24."
+        },
+        {
+          "type": "chart",
+          "file": "cpc_by_class.png",
+          "caption": "Urgency carries a premium: a searcher who needs help now costs roughly fourteen times more to reach than one who is still reading."
+        },
+        {
+          "type": "chart",
+          "file": "money_map.png",
+          "caption": "Each term's searches multiplied by its click price shows where the money in this market concentrates — a handful of head terms."
+        },
+        {
+          "type": "chart",
+          "file": "format_mix.png",
+          "caption": "This is largely a text-ad market, which keeps production costs low for anyone entering it."
+        },
+        {
+          "type": "callout",
+          "variant": "watch-out",
+          "title": "Worth knowing",
+          "text": "Click prices are most reliable on the high-volume terms and noisiest on the small ones — the three urgent terms carry fewer than 700 searches a month between them, so treat their $3.40 as a direction rather than a quote."
+        }
+      ]
+    }
+  ],
+  "explanations": [
+    {
+      "name": "Recovery framing is what keeps an ad alive",
+      "premises": [
+        "A four-figure tub is easier to justify as training equipment than as a hobby, so the buyer needs a performance reason more than a novelty one.",
+        "Advertisers keep only the ads that pay, so wording that survives a year has been selected by results rather than by taste."
+      ],
+      "evidence": "14 of the 17 ads past 90 days lead on recovery or routine, against 3 of the 11 newer ones — and the 17 are spread evenly across all four advertisers, so this is the market's pattern rather than one brand's house style.",
+      "alternative": "Recovery language could simply be the category's default phrasing, carrying no weight of its own. If that were true the newer ads would use it at the same rate; they use it at a third of the rate."
+    },
+    {
+      "name": "The cheap half is unpriced because sellers see a product, not a practice",
+      "premises": [
+        "All four advertisers bid on the same product vocabulary — their keyword footprints overlap heavily.",
+        "Practice-language searchers are further from a purchase, so advertisers who measure on immediate sales stop bidding on them."
+      ],
+      "evidence": "9 practice terms carry 158,400 searches a month, none of the four advertisers appears on any of them, and publishers hold those results. The price gap is fourfold: $0.24 against $1.80.",
+      "alternative": "Those searches may simply never lead to purchases, which would make ignoring them rational. Buying intent is not visible on a search term either way — which is exactly why path 2 below is a cheap test rather than a commitment."
+    }
+  ],
+  "paths_lead": "Four routes into this market, ranked by what the evidence here supports. They are not mutually exclusive, but the first one you fund determines what the next six months cost.",
+  "paths_forward": [
+    {
+      "rank": 1,
+      "name": "Own the practice questions with content, then sell into them",
+      "thesis": "Answer the questions the practice searchers are already asking — how cold, how long, before or after training — and put the product at the end of the answer rather than at the front of it.",
+      "evidence": "158,400 searches a month at about $0.24 a click, with no product advertiser present on any of the nine terms. “Cold plunge before or after workout” alone is 8,100 searches a month and appears in none of the 28 ads running.",
+      "tradeoff": "The slowest route to revenue: content takes months to rank, and these searchers are further from buying, so the payback shows up in quarter three, not week three.",
+      "best_if": "You can fund six months before the return, and you would rather own an audience than rent one.",
+      "first_step": "Publish against the five largest unanswered questions in chapter 2's table, and put a $500 test behind the two cheapest terms to price the traffic for real."
+    },
+    {
+      "rank": 2,
+      "name": "Buy the practice terms now, while they are cheap",
+      "thesis": "Run ads directly against the unpriced practice terms with an offer built for someone still deciding whether to try cold exposure at all — a guide, a starter kit, a trial.",
+      "evidence": "$0.24 a click against $1.80 on the product terms, with no advertiser competing on nine terms totalling 158,400 monthly searches. The auction is empty because sellers are not looking there, not because Google is pricing it oddly.",
+      "tradeoff": "Cheapest clicks in the market, but conversion is unproven on this audience — you are paying to find out. Budget it as a test, not as a channel.",
+      "best_if": "You want a read on real buying intent within weeks and can absorb a test that returns nothing but an answer.",
+      "first_step": "Take the four largest practice terms, run them at exact match for two weeks, and compare cost per lead against the product-term benchmark."
+    },
+    {
+      "rank": 3,
+      "name": "Fight for the product terms on a sharper message",
+      "thesis": "Enter the auction the four incumbents are already in, and win on positioning rather than on price — the recovery framing is crowded, and no ad in this market speaks to small spaces, apartments or setup.",
+      "evidence": "124,280 searches a month at $1.80, and 14 of the 17 long-running ads say the same recovery thing. Nobody is running the space or setup angle, and “built for small spaces” is the only such ad in the set — it has been live 412 days.",
+      "tradeoff": "The most expensive route and the most contested: you pay $1.80 a click against four companies that also hold the free listings, so the cost per customer is set by their tolerance, not yours.",
+      "best_if": "You have a product difference a searcher can see in one line, and enough margin to bid on a customer rather than court one.",
+      "first_step": "Write three ads against the positioning nobody occupies, and price a month at the top-of-page bid before committing."
+    },
+    {
+      "rank": 4,
+      "name": "Take the urgent tail — repair, parts, and rentals",
+      "thesis": "Serve the people whose equipment has already failed: chiller repair, replacement parts, emergency rental. High intent, immediate money, and no advertiser present.",
+      "evidence": "Three terms at about $3.40 a click — twice the category rate — which is what a market pays when a searcher buys the same day. But the volume is small: 670 searches a month between them.",
+      "tradeoff": "The clearest intent in the market attached to the smallest audience. It cannot be a business on its own, and it needs operational capacity — someone has to actually turn up.",
+      "best_if": "You already have service capability, or you want a high-margin attachment to one of the routes above rather than a standalone business.",
+      "first_step": "Check whether the volume grows with the installed base by re-pricing these three terms in ninety days, before building anything around them."
+    }
+  ],
+  "paths_close": "Fund path 1, test path 2 alongside it for a month. Together they cost less than a single month of path 3 and tell you whether the cheap audience converts before you commit to the expensive one.",
+  "glossary": [
+    {
+      "term": "search volume",
+      "plain": "how many times a phrase is typed into Google in an average month, in the market this report covers"
+    },
+    {
+      "term": "CPC (cost per click)",
+      "plain": "the price an advertiser pays Google each time someone clicks their ad"
+    },
+    {
+      "term": "top-of-page bid",
+      "plain": "what Google estimates an advertiser must bid to appear above the search results rather than below them"
+    },
+    {
+      "term": "creative",
+      "plain": "one individual ad — its wording and its artwork"
+    },
+    {
+      "term": "search spend estimate",
+      "plain": "a term's monthly searches multiplied by its price per click: what buying every click would cost in a month"
+    },
+    {
+      "term": "direct demand",
+      "plain": "people searching for the thing itself, usually with buying intent"
+    },
+    {
+      "term": "latent demand",
+      "plain": "people searching around a problem that few businesses are paying to answer yet"
+    },
+    {
+      "term": "urgent demand",
+      "plain": "searches phrased as needing help now — they cost more per click because they buy sooner"
+    },
+    {
+      "term": "indirect demand",
+      "plain": "people searching for a neighbouring problem that leads to this one"
+    }
+  ],
+  "appendix_tables": [
+    {
+      "title": "All harvested search terms",
+      "csv": "clean/keywords.csv",
+      "what_it_is": "Every search term measured, with its monthly searches, click price and the kind of demand it was classed as."
+    },
+    {
+      "title": "Websites found",
+      "csv": "clean/domains.csv",
+      "what_it_is": "Every website appearing in these searches, what kind of site it is, and whether it also buys ads."
+    },
+    {
+      "title": "Advertisers",
+      "csv": "clean/advertisers.csv",
+      "what_it_is": "Every company found buying ads in this market, with the size of its ad library."
+    },
+    {
+      "title": "Ad creatives",
+      "csv": "clean/ads.csv",
+      "what_it_is": "Every individual ad, how long it has run, and whether it is still running."
+    },
+    {
+      "title": "Ad wording, read from the pictures",
+      "csv": "clean/ad_copy.csv",
+      "what_it_is": "The exact words on each ad, read off the ad images reproduced in Appendix A."
+    },
+    {
+      "title": "Search results",
+      "csv": "clean/serp_results.csv",
+      "what_it_is": "What Google returns for each of these searches, including which results are paid ads."
+    }
+  ]
+}

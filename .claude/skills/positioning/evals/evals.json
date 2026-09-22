@@ -1,0 +1,20 @@
+{
+  "skill": "positioning",
+  "evals": [
+    {
+      "id": "plausible-analytics-url-only",
+      "prompt": "Can you do positioning work for https://plausible.io — I want the April Dunford treatment. Budget $6. Give me a PDF I can take into a board meeting.",
+      "expected_output": "A landscape PDF that is mostly charts: alternative-set map including the do-nothing/spreadsheet lanes, a unique-vs-table-stakes matrix against real competitors, a market-frame quadrant with one recommendation, a positioning canvas and sales story. Minimal prose. Every figure traceable to a fetched page or a keyword row."
+    },
+    {
+      "id": "posthog-category-question",
+      "prompt": "we're at https://posthog.com and honestly i think we're in the wrong category. everyone lumps us in with product analytics and we get compared to amplitude on features we don't care about. what category should we actually be competing in and who should we be selling to? spend up to $8",
+      "expected_output": "Frame quadrant comparing several candidate categories on demand vs favourability, one recommended, with the cost of taking it stated. Segment heat map picking a narrow segment. Should push back if the data says product analytics is actually the right frame."
+    },
+    {
+      "id": "linear-losing-to-competitor",
+      "prompt": "positioning for https://linear.app please. we keep losing deals to Jira and I don't know if that's a product problem or a positioning problem",
+      "expected_output": "Attribute matrix showing which capabilities are genuinely unique vs table stakes against Jira and the rest of the alternative set, plus messaging-crowding chart showing which claims are already taken. Should answer the product-vs-positioning question from the evidence."
+    }
+  ]
+}

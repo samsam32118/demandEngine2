@@ -1,0 +1,29 @@
+{
+  "skill_name": "dataforseo-keywords",
+  "evals": [
+    {
+      "id": 0,
+      "name": "seed-keyword-demand-sizing",
+      "prompt": "We're about to put real money into the Google $500 ad round for James and I don't want to guess. Can you pull actual search volume and CPC for these terms in the US so we can see which ones are worth bidding on? 'ai sales coach', 'sales coaching app', 'ai roleplay for sales', 'cold call practice tool'. Give me the numbers in a table.",
+      "expected_output": "Uses the dataforseo-keywords skill's for-keywords op (US/en) and returns a table with search_volume, competition, cpc, and top-of-page bids for the seed terms (plus related ideas). Should not fabricate numbers.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 1,
+      "name": "competitor-domain-footprint",
+      "prompt": "I want to see what keywords a big sales-tech competitor is relevant for. Pull the keyword footprint for gong.io, sorted by search volume, and save the full list as a CSV I can drop into our keyword research folder.",
+      "expected_output": "Uses the for-site op on gong.io with --sort-by search_volume and --csv writing to research/data/keywords/ (or similar). Reports total row count and that the full set went to the CSV while showing a preview.",
+      "files": [],
+      "assertions": []
+    },
+    {
+      "id": 2,
+      "name": "ad-spend-forecast",
+      "prompt": "If we bid on 'ai sales coach' and 'best ai sales coach' as exact match in the US, roughly what would a month of clicks and ad spend look like? I want a realistic estimate before we commit budget.",
+      "expected_output": "Uses the ad-traffic op with --bid, --match exact, next_month window; explains the result is a campaign-level aggregate (total clicks, average_cpc, cost) rather than per-keyword, and reports the forecast numbers.",
+      "files": [],
+      "assertions": []
+    }
+  ]
+}

@@ -1,0 +1,62 @@
+{
+  "skill_name": "dataforseo-ads-transparency",
+  "evals": [
+    {
+      "id": 0,
+      "name": "competitor-ad-library-longest-running",
+      "prompt": "we're rewriting our google ads copy next week and i want to steal from whoever's doing it best. can you pull hubspot's ad library (hubspot.com) and tell me which of their creatives have been running the longest? those are the ones that must be working. a table is fine, and save the full thing somewhere i can open in excel",
+      "expected_output": "A table of HubSpot creatives sorted/ranked by run length, identifying the longest-running ads with their days_running and transparency URLs, plus a CSV file written to disk. Should note the format mix and that long-running = proven.",
+      "files": [],
+      "assertions": [
+        "Pulled real HubSpot creatives from the API (names specific creative_ids or a concrete creative count)",
+        "Ranks creatives by how long they have been running, not by recency or API rank order",
+        "Reports concrete run durations in days (or first/last-shown dates) for the top creatives",
+        "Wrote a spreadsheet-openable file (CSV/XLSX) to disk and told the user where it is",
+        "Includes adstransparency.google.com URLs so the user can view the actual creatives",
+        "Answer is usable for the stated goal (rewriting ad copy) rather than a raw data dump"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "video-vs-text-format-check",
+      "prompt": "quick one before i go into a budget meeting \u2014 is salesforce actually running video ads right now, or is their google spend all text? salesforce.com",
+      "expected_output": "Uses --ad-format to separate video from text creatives for salesforce.com, reports the format mix with real counts, and answers the yes/no question directly. Should not claim platform-level (YouTube) certainty from the platform filter.",
+      "files": [],
+      "assertions": [
+        "Answers the yes/no question directly and early, not buried after a data dump",
+        "Reports actual counts of video vs text creatives obtained from a real API call",
+        "Used the --ad-format filter to separate formats rather than inferring from an unfiltered pull",
+        "Does not claim YouTube-surface certainty on the basis of the --platform filter",
+        "Response is short enough to read before a meeting (the user asked for a quick answer)"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "advertiser-ids-multi-account",
+      "prompt": "i need the actual google advertiser IDs for nike \u2014 there seem to be several accounts and i want all of them with how many ads each one is running",
+      "expected_output": "Lists Nike's advertiser accounts including the ones nested inside the multi-account group (e.g. AR16735076323512287233), each with approx_ads_count. Should not report a brand name without an ID.",
+      "files": [],
+      "assertions": [
+        "Returns at least one advertiser ID in the AR<digits> format",
+        "Includes the IDs nested inside the multi-account advertiser group, not only top-level ones",
+        "Gives an approximate ad count per account",
+        "Does not present a brand-name row that has no advertiser ID as if it were a usable account",
+        "Distinguishes Nike's own accounts from unrelated advertisers whose names merely contain 'nike'"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "category-term-redirect",
+      "prompt": "can you find all the advertisers competing in the crm software space on google ads? want to see who's spending",
+      "expected_output": "Recognizes that the advertisers endpoint matches advertiser names/domains rather than category terms, so it does NOT report 'no advertisers found'. Instead identifies named CRM competitors (Salesforce, HubSpot, etc.) and pulls their libraries via ads --target, explaining the limitation.",
+      "files": [],
+      "assertions": [
+        "Does NOT report that no advertisers were found for the category term",
+        "Names actual CRM competitors (e.g. Salesforce, HubSpot, Zoho, Pipedrive, monday.com)",
+        "Pulls real ad data for at least one named competitor via --target or advertiser IDs",
+        "Explains that the advertisers endpoint matches advertiser names/domains, not category terms",
+        "States the coverage limitation honestly rather than implying the list is exhaustive"
+      ]
+    }
+  ]
+}
