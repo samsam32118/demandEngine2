@@ -25,6 +25,7 @@ from typing import Any, Sequence
 
 import jev
 import kgraph as K
+import serp as S
 
 # A Noul's 0.5 is not a tuned constant — it is the point at which the model
 # says yes rather than no. Where this module uses a different number, the
@@ -169,6 +170,129 @@ def confirm_entities(client: jev.Client, graph: K.Graph,
         kw.entities = sorted(n for n in names if n in toks)
     return Stage("confirm_entities", len(questions), result.usage,
                  [f"brands: {', '.join(names[:12])}"] if names else [])
+
+
+def pick_sellers(client: jev.Client, graph: K.Graph,
+                 results: Sequence[Any], asker: str) -> tuple[list[Any], Stage]:
+    """Which of the sites ranking here are businesses selling the thing?
+
+    This is the judgment that turns a word into a seed worth paying for.
+    A directory, a government procurement portal, a trade magazine and a
+    vendor all rank for the same commercial term, and only one of them has
+    a keyword footprint that is this market's own vocabulary. Harvesting
+    Capterra would return the vocabulary of all software; harvesting the
+    vendor returns the vocabulary of the thing.
+
+    Reading a title, a domain and a snippet and saying what kind of
+    organisation is behind them is exactly what a literal reader does well,
+    and exactly what a regex cannot.
+    """
+    if not results:
+        return [], Stage("pick_sellers", 0, jev.Usage())
+    questions = {}
+    for i, r in enumerate(results):
+        questions[f"kind:{i}"] = jev.Choice(
+            instructions={"website": r.domain, "page_title": r.title,
+                          "what_it_says": r.snippet,
+                          "searched_for": graph.seed,
+                          "question": "Someone searched for `searched_for` "
+                                      "and this page came back. What kind of "
+                                      "organisation is behind `website`?"},
+            criteria={
+                "sells_this": "A company whose own business is selling this "
+                              "thing — its product or service site",
+                "sells_something_wider": "A company that sells this among "
+                                         "many other things, where this is "
+                                         "one line of a much broader "
+                                         "business",
+                "lists_or_compares": "A directory, review site, price "
+                                     "comparison or roundup of other "
+                                     "people's products",
+                "writes_about_this": "A publication, blog, encyclopedia or "
+                                     "reference that explains it without "
+                                     "selling it",
+                "buys_or_regulates": "A buyer, government body, procurement "
+                                     "portal or regulator, rather than a "
+                                     "supplier",
+                "neither": "Something else entirely — it is here by accident",
+            })
+    result = client.ask(_market_state(graph, asker), questions)
+    sellers, notes = [], []
+    tally: dict[str, int] = {}
+    for i, r in enumerate(results):
+        answer = result.choice(f"kind:{i}")
+        r.kind = answer.choice
+        r.kind_confidence = answer.confidence
+        tally[answer.choice] = tally.get(answer.choice, 0) + 1
+        if answer.choice == "sells_this" and decisive(answer):
+            sellers.append(r)
+    notes.append(", ".join(f"{v} {k}" for k, v in
+                           sorted(tally.items(), key=lambda x: -x[1])))
+    # A broad seller is harvested only when no focused one ranks. Its
+    # keyword footprint is mostly a different market, and buying it floods
+    # the corpus with vocabulary that outvotes the market's own.
+    if not sellers:
+        wider = [r for i, r in enumerate(results)
+                 if result.choice(f"kind:{i}").choice == "sells_something_wider"]
+        if wider:
+            notes.append(f"no focused seller ranks here; falling back to "
+                         f"{len(wider)} broader business(es)")
+            sellers = wider
+    if not sellers:
+        notes.append("nobody ranking here is selling anything — the demand "
+                     "is informational, or it is bought somewhere else")
+    return sellers, Stage("pick_sellers", len(questions), result.usage, notes)
+
+
+def keep_relevant(client: jev.Client, graph: K.Graph,
+                  keywords: Sequence[K.Keyword], asker: str
+                  ) -> tuple[list[str], Stage]:
+    """Which harvested searches actually belong to this market?
+
+    Harvesting is worth doing and dangerous for the same reason: it takes
+    whatever the business is about, and a business is usually about more
+    than the market you asked about. Harvesting Radar Healthcare for
+    `ambulance software` returned 503,680 searches a month of which 680
+    were ambulances — the rest was the whole of UK healthcare, led by
+    `health information management` at 33,100 a month.
+
+    Left in, that corpus does not merely add noise. Topics are mined by
+    volume, so the market's own vocabulary is outvoted by the incumbent's
+    wider business and the report ends up about the wrong thing.
+
+    A regex cannot do this: the market's real vocabulary includes words the
+    seed never contained, which is the entire point of harvesting. Reading
+    a phrase and saying whether it belongs to a named market is a question
+    about meaning.
+
+    Returns the terms to drop.
+    """
+    if not keywords:
+        return [], Stage("relevance", 0, jev.Usage())
+    questions = {}
+    for i, kw in enumerate(keywords):
+        questions[f"rel:{i}"] = jev.Noul(
+            instructions={"search": kw.term, "market": graph.seed,
+                          "question": "Is someone searching `search` looking "
+                                      "for something in the `market` "
+                                      "market?"},
+            criteria={
+                "true": "Yes, or close enough that anyone selling in this "
+                        "market would care about that search",
+                "false": "No, this is about something else — a neighbouring "
+                         "industry, a broader subject, or an unrelated need",
+            })
+    result = client.ask(_market_state(graph, asker), questions)
+    drop = [kw.term for i, kw in enumerate(keywords)
+            if not result.noul(f"rel:{i}").yes(YES)]
+    kept_volume = sum(kw.volume for i, kw in enumerate(keywords)
+                      if result.noul(f"rel:{i}").yes(YES))
+    total_volume = sum(kw.volume for kw in keywords) or 1
+    return drop, Stage(
+        "relevance", len(questions), result.usage,
+        [f"{len(keywords) - len(drop)} of {len(keywords)} harvested searches "
+         f"belong to this market, carrying {kept_volume:,} of "
+         f"{total_volume:,} searches ({kept_volume / total_volume:.0%})"])
 
 
 # --------------------------------------------------------------------------

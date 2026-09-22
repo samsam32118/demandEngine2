@@ -7,8 +7,9 @@ network that turns measurements into an answer.
 Every node is coloured by **who does the work**, because that division is
 the method:
 
-- **orange — DataForSEO.** The only place money is spent. Every one of these
-  is about $0.09 whether it carries one keyword or a thousand.
+- **orange — the paid APIs.** Every DataForSEO call is about $0.09 whether
+  it carries one keyword or a thousand; the search-results call is billed
+  against a separate daily allowance.
 - **blue — Jev.** Every judgment. No language model appears anywhere.
 - **green — code.** Arithmetic, string handling, budgets, and rendering
   sentences from templates. No judgment.
@@ -21,14 +22,23 @@ the method:
 flowchart TB
   IN(["keyword · country · who is asking"]):::io
 
+  IN --> SERP
+  SERP["search results for the seed<br/>who actually ranks"]:::money
+  SERP --> QSELL{{"what kind of organisation is this?<br/>sells it · sells something wider ·<br/>lists it · writes about it · buys it"}}:::jev
+  QSELL -->|"a focused seller"| SITE
+  QSELL -->|"nobody sells here —<br/>itself the finding"| EXPAND
+
   subgraph OBS["OBSERVE — the only billable step"]
     direction LR
-    EXPAND["expand<br/>20 seeds into Google's idea list<br/>48 months of history, same price"]:::money
+    SITE["for-site<br/>a live business's whole footprint<br/>619 rows where a word gave 31"]:::money
+    EXPAND["expand<br/>Google's idea list for a string<br/>collapses on a niche seed"]:::money
     PRICEP["price<br/>up to 1000 synthesised guesses<br/>each word order asked once"]:::money
     FCAST["forecast<br/>what the biddable searches deliver"]:::money
   end
 
-  IN --> EXPAND
+  SITE --> QREL{{"is this search in this market at all?<br/>a business is wider than its market"}}:::jev
+  QREL -->|"no"| DROPPED["discarded before it can<br/>outvote the market's own words"]:::code
+  QREL -->|"yes"| ROWS
   EXPAND --> ROWS
   PRICEP --> ROWS
   ROWS["rows: volume · click price · bids · 48-month series"]:::code

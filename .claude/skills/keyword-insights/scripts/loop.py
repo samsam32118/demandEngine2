@@ -40,11 +40,13 @@ import kgraph as K
 import market_net as MN
 import report as report_mod
 import seo
+import serp as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 SEO_CACHE = os.path.join(SKILL, ".cache", "dataforseo")
 JEV_CACHE = os.path.join(SKILL, ".cache", "jev")
+SERP_CACHE = os.path.join(SKILL, ".cache", "serp")
 
 # Three probes is the smallest run that can do the thing this loop is for:
 # one to see the market, one to chase what looked odd, and one to go
@@ -75,6 +77,7 @@ class Run:
                            offline=args.offline)
         self.client = jev.Client(cache_dir=JEV_CACHE,
                                  use_cache=not args.no_jev_cache)
+        self.serp = S.Serp(cache_dir=SERP_CACHE, offline=args.offline)
         self.stages: list[judge.Stage] = []
         self.trail: list[insights.Thread] = []
         self.open: list[insights.Thread] = []
@@ -86,6 +89,7 @@ class Run:
         self.verdict: dict[str, float] = {}
         self.prior: dict[str, float] = {}
         self.forecast: dict | None = None
+        self.ranked: list = []
         self.log: list[str] = []
         self.oriented_at = -1
         self.started = time.time()
@@ -155,6 +159,89 @@ class Run:
                  f" · ${call.cost_usd:.4f}"
                  f"{' (cached)' if call.from_cache else ''}")
         return [t for t in self.graph.keywords if t not in before]
+
+    def harvest(self, query: str) -> int:
+        """Turn a word into the businesses selling behind it, then harvest.
+
+        This is the opening move because it is worth far more than the
+        alternative. Measured on one market at the same $0.09:
+
+            expand "epcr"      ->    31 keywords,   2,100 searches a month
+            for-site eso.com   ->   619 keywords, 367,940 searches a month
+
+        `for-keywords` expands off the breadth of a string, so a niche
+        phrase returns almost nothing: `investtech` gave 18 rows,
+        `ambulance software` 25. A site expands off what a live business is
+        about, and a business that has paid to rank is evidence somebody is
+        selling here. Invented keywords are hypotheses; harvested ones are
+        observed commercial vocabulary.
+
+        Finding nobody who sells is not a failure of the move. It is the
+        most decisive thing this loop can learn about a market, and it
+        falls through to expansion saying so.
+        """
+        self.say(f"  HARVEST  who is actually selling behind “{query}”")
+        try:
+            found = self.serp.results(
+                query, country=_country_code(self.args.location),
+                hl=self.args.language, limit=10)
+        except S.SerpError as exc:
+            self.say(f"      . no search results: {exc}")
+            return 0
+        plausible = S.plausible_vendors(found)
+        self.say(f"      . {len(found)} results, {len(plausible)} could be "
+                 f"a business")
+        sellers, stage = judge.pick_sellers(self.client, self.graph,
+                                            plausible, self.args.asker)
+        self.stage(stage)
+        self.ranked = found
+        if not sellers:
+            return 0
+
+        added = 0
+        for site in sellers[:self.args.sites]:
+            try:
+                call = self.seo.site(site.domain)
+            except (seo.BudgetExceeded, seo.OfflineMiss, seo.SeoError) as exc:
+                self.say(f"      . stopped harvesting: {exc}")
+                break
+            before = set(self.graph.keywords)
+            self.graph.add_rows(call.rows)
+            fresh = [t for t in self.graph.keywords if t not in before]
+            volume = sum(self.graph.keywords[t].volume for t in fresh)
+            self.graph.sites[site.domain] = K.Site(
+                domain=site.domain, title=site.title, snippet=site.snippet,
+                rank=site.rank, kind=site.kind, harvested=len(fresh),
+                volume=volume)
+            added += len(fresh)
+            self.say(f"      . {site.domain}: {len(call.rows):,} rows, "
+                     f"{len(fresh):,} new, {volume:,} searches/mo"
+                     f" - ${call.cost_usd:.4f}")
+
+        # A harvest brings in whatever the business is about, which is
+        # usually wider than the market. Topics are mined by volume, so an
+        # unfiltered harvest lets the incumbent's other business outvote
+        # this market's own vocabulary and the report ends up about the
+        # wrong thing.
+        if added:
+            candidates = sorted(
+                (k for k in self.graph.keywords.values()
+                 if k.source.startswith("site:") and k.volume > 0),
+                key=lambda k: -k.volume)[:self.args.relevance_cap]
+            drop, stage = judge.keep_relevant(self.client, self.graph,
+                                              candidates, self.args.asker)
+            self.stage(stage)
+            if drop:
+                gone = self.graph.drop(drop)
+                added -= gone
+                for site in self.graph.sites.values():
+                    site.harvested = sum(
+                        1 for k in self.graph.keywords.values()
+                        if k.source == f"site:{site.domain}")
+                    site.volume = sum(
+                        k.volume for k in self.graph.keywords.values()
+                        if k.source == f"site:{site.domain}")
+        return added
 
     # -- ORIENT ----------------------------------------------------------
 
@@ -263,6 +350,15 @@ class Run:
                  f"{a.iterations} probe(s) · ceiling ${a.max_spend:.2f}")
         self.say(f"asking on behalf of: {a.asker}")
 
+        harvested = 0
+        if not a.no_harvest:
+            harvested = self.harvest(a.keyword)
+        if not harvested:
+            # Either nobody selling ranks here, or harvesting was
+            # declined. Google's own idea list is the fallback, and
+            # on a niche seed it returns very little, which is itself
+            # worth reporting.
+            self.say("  OBSERVE  falling back to Google's idea list")
         self.observe("expand", [a.keyword], f"what surrounds “{a.keyword}”")
         last_paid_off = True
         last_children: list[insights.Thread] = []
@@ -451,6 +547,11 @@ class Run:
                 for d in MN.DECISION},
             "unsplittable_rows": (self.net.low_confidence if self.net else []),
             "forecast": self.forecast,
+            "ranked_for_seed": [r.as_dict() for r in self.ranked],
+            "harvested_from": [
+                {"domain": x.domain, "kind": x.kind, "rank": x.rank,
+                 "keywords": x.harvested, "searches": x.volume}
+                for x in self.graph.sites.values()],
             "trail": [asdict(t) for t in self.trail],
         }
 
@@ -506,6 +607,18 @@ def plan(args) -> int:
     return 0
 
 
+_COUNTRIES = {"united states": "us", "united kingdom": "gb", "norway": "no",
+              "sweden": "se", "denmark": "dk", "finland": "fi",
+              "germany": "de", "france": "fr", "netherlands": "nl",
+              "spain": "es", "italy": "it", "canada": "ca",
+              "australia": "au", "ireland": "ie", "india": "in"}
+
+
+def _country_code(location) -> str | None:
+    """Google's country code, or nothing — which searches without one."""
+    return _COUNTRIES.get(str(location).strip().lower())
+
+
 def _slug(text: str) -> str:
     return "-".join("".join(c if c.isalnum() else " "
                             for c in text.lower()).split())[:60] or "run"
@@ -544,6 +657,15 @@ def main(argv=None) -> int:
                         "can absorb it")
     r.add_argument("--max-spend", type=float, default=1.00,
                    help="hard ceiling in USD, checked before each call")
+    r.add_argument("--sites", type=int, default=2,
+                   help="how many ranking businesses to harvest keywords "
+                        "from on the opening move (default 2)")
+    r.add_argument("--no-harvest", action="store_true",
+                   help="seed from the keyword alone. On a niche seed that "
+                        "returns very little")
+    r.add_argument("--relevance-cap", type=int, default=400,
+                   help="how many harvested searches to check for belonging "
+                        "to this market (by volume, default 400)")
     r.add_argument("--judge-cap", type=int, default=DEFAULT_JUDGE_CAP)
     r.add_argument("--max-claims", type=int, default=90)
     r.add_argument("--arm", choices=("jev", "code"), default="jev",

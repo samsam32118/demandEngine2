@@ -99,6 +99,46 @@ tuned number but the point at which the model says yes rather than no.
 
 See `references/jev-contract.md` before changing any question.
 
+## The seed is a business, not a word
+
+The opening move is not to expand the keyword. It is to search it, work out
+which of the results is a company actually selling into this market, and
+harvest **that company's** keyword footprint.
+
+The reason is a measurement, on one market, at the same $0.09:
+
+| | keywords | searches a month |
+|---|---:|---:|
+| `expand "epcr"` | 31 | 2,100 |
+| **`for-site eso.com`** | **619** | **367,940** |
+
+`for-keywords` expands off the breadth of a *string*, so a niche phrase
+returns almost nothing — `investtech` gave 18 rows, `ambulance software` 25.
+`for-site` expands off what a live business is *about*, and a business that
+has paid to rank is evidence somebody is selling here. **Invented keywords
+are hypotheses; harvested ones are observed commercial vocabulary.** It also
+reaches words no expansion could: `electronic health records software` at
+40,500 a month is the market ambulance software sits inside, and nobody
+would have thought to seed it.
+
+**A business is wider than its market, so the harvest is gated.** Harvesting
+Radar Healthcare for `ambulance software` returned 503,680 searches a month
+of which 680 were ambulances; the rest was the whole of UK healthcare. Left
+in, that does not merely add noise — topics are mined by volume, so the
+incumbent's other business outvotes the market's own vocabulary and the
+report ends up about the wrong thing. Every harvested search is asked
+whether it belongs to the market before it is allowed to count.
+
+**Finding that nobody selling ranks is not a failure.** It is the most
+decisive thing the loop can learn, and it falls through to Google's idea
+list saying so.
+
+```bash
+--sites 2        # how many ranking businesses to harvest (default 2)
+--no-harvest     # seed from the keyword alone, which on a niche seed
+                 # returns very little
+```
+
 ## The answer, not just the facts
 
 A report that lists facts leaves the reader to do the reasoning. This one
@@ -313,6 +353,7 @@ improvements have already been tried, and several of them made things worse.
 |---|---|
 | `scripts/loop.py` | the OODA driver and the CLI |
 | `scripts/seo.py` | DataForSEO, cached and budgeted, with real billed costs |
+| `scripts/serp.py` | who ranks for a search — the bridge from a word to a business |
 | `scripts/kgraph.py` | the graph and all the arithmetic. No judgment |
 | `scripts/judge.py` | every Jev question in the skill |
 | `scripts/insights.py` | claim templates and the follow-up table |

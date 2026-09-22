@@ -161,6 +161,26 @@ class Entity:
     confirmed: bool = False
 
 
+@dataclass
+class Site:
+    """A business that ranks for this market, and what harvesting it gave.
+
+    A site is a different kind of seed from a word. A word expands off its
+    own breadth, so a niche phrase returns almost nothing. A site expands
+    off what a live business is about — and a business that has invested in
+    ranking is evidence that somebody is selling here, which an invented
+    keyword never is.
+    """
+
+    domain: str
+    title: str = ""
+    snippet: str = ""
+    rank: int = 0
+    kind: str = ""
+    harvested: int = 0
+    volume: int = 0
+
+
 # --------------------------------------------------------------------------
 # Arithmetic helpers — the whole vocabulary of this module
 # --------------------------------------------------------------------------
@@ -452,6 +472,7 @@ class Graph:
         self.keywords: dict[str, Keyword] = {}
         self.topics: dict[str, Topic] = {}
         self.entities: dict[str, Entity] = {}
+        self.sites: dict[str, Site] = {}
         self.iterations: list[dict] = []
         self.collapsed = 0
         self.add_topic(self.seed, kind="seed", confirmed=True)
@@ -724,6 +745,7 @@ class Graph:
             "keywords": [asdict(k) for k in self.keywords.values()],
             "topics": [asdict(t) for t in self.topics.values()],
             "entities": [asdict(e) for e in self.entities.values()],
+            "sites": [asdict(s) for s in self.sites.values()],
             "iterations": self.iterations,
         }
 
@@ -736,6 +758,8 @@ class Graph:
             g.topics[t["name"]] = Topic(**t)
         for e in data.get("entities", []):
             g.entities[e["name"]] = Entity(**e)
+        for st in data.get("sites", []):
+            g.sites[st["domain"]] = Site(**st)
         g.iterations = data.get("iterations", [])
         return g
 

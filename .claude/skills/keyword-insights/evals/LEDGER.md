@@ -496,3 +496,107 @@ claims, so they chase different probes, so the threshold arm's forecast
 keywords miss the frozen cache. The comparison that matters is unchanged —
 it keeps 86% of everything it generates, against 28%, and still reports a
 confident finding about the market that does not exist.
+
+---
+
+## it-13 — the seed should be a business, not a word
+
+The opening move was `for-keywords` on the seed. That expands off the
+breadth of a *string*, and this skill kept meeting markets where a string
+has no breadth:
+
+| seed | keywords returned |
+|---|---:|
+| `meal planning` | 24,028 |
+| `project management software` | 1,651 |
+| `aksjetips` | 48 |
+| `epcr` | 31 |
+| `ambulance software` | 25 |
+| `investtech` | 18 |
+
+Every thin, disappointing run in this ledger is in the bottom half of that
+table. The fix is to stop seeding with words. Same market, same $0.09:
+
+| | keywords | searches a month |
+|---|---:|---:|
+| `expand "epcr"` | 31 | 2,100 |
+| **`for-site eso.com`** | **619** | **367,940** |
+
+A site expands off what a live business is *about*, and a business that has
+paid to rank is evidence somebody is selling here. Invented keywords are
+hypotheses; harvested ones are observed commercial vocabulary. It also
+reaches words no expansion could — `electronic health records software` at
+40,500 a month is the market ambulance software sits inside, and nobody
+would have thought to seed it.
+
+So the opening move is now: search the seed, ask Jev which result is a
+company actually selling into this market, and harvest that company.
+
+### Finding nobody who sells is the finding
+
+The fallback matters as much as the move. When no focused seller ranks, the
+loop says so and falls through to Google's idea list. That is the most
+decisive thing it can learn about a market, and it is exactly the shape of
+the EWA and Investtech results.
+
+### The trap, and the guard
+
+A business is wider than its market. Harvesting Radar Healthcare for
+`ambulance software` returned **503,680 searches a month of which 680 were
+ambulances** — the rest was the whole of UK healthcare, led by `health
+information management` at 33,100 a month.
+
+Left in, that is not noise. **Topics are mined by volume**, so the
+incumbent's other business outvotes the market's own vocabulary and the
+report comes out about the wrong thing. A regex cannot fix it either: the
+market's real vocabulary contains words the seed never held, which is the
+whole point of harvesting.
+
+So every harvested search is asked whether it belongs to the market before
+it counts. On that run it kept **69 of 400**, carrying 20% of the harvested
+volume.
+
+| | before the gate | after |
+|---|---:|---:|
+| intent coverage | 46% | **60%** |
+| findings surviving | 3 | **5** |
+| forecast | 26 clicks at $7.74 | 4 clicks at $10.85 |
+
+Upstream, `pick_sellers` now separates a focused seller from one that
+"sells this among many other things", and only falls back to the broader
+business when no focused one ranks.
+
+### What this costs, and what it corrects
+
+The opening move goes from one call to one search plus `--sites` calls
+(default 2), so a default run is about $0.55 rather than $0.37.
+
+It also corrects a report written from the old opening move. The EWA
+analysis concluded this market carries "about 340 searches a month with
+clear commercial intent" from a 31-keyword corpus; harvested, the same
+market carries 98,800 on-market searches. The corpus was ~290x too small.
+Its *recommendation* survives — only 38 to 45 of those searches carry a
+biddable top-of-page bid, forecasting 4 to 26 clicks a month — but the
+market description in it was wrong, which is what a 31-keyword corpus buys.
+
+### Measured, live, both before and after
+
+| case | findings before | after | candidates before | after |
+|---|---:|---:|---:|---:|
+| broad-competitive | 4 | 3 | 12 | 14 |
+| consumer-seasonal | 3 | 5 | 10 | 13 |
+| **thin-niche** | **3** | **6** | **6** | **14** |
+| trap-nonexistent | 0 | **0** | 1 | 1 |
+
+Candidates rose in every market, because there is more corpus to build them
+from. The thin niche — the case this was for — **doubled its findings on a
+corpus more than twice the size**, and the market that does not exist still
+returns nothing, which is the check that matters most: a move that finds
+more in every market including the empty one would be finding noise.
+
+| | it-12 | it-13 |
+|---|---|---|
+| jev eval checks | 22/22 | **22/22** |
+| mean kept_share | 0.32 | 0.26 |
+| selftest | 58 | **65** |
+| suite cost (live) | $0.74 | $0.87 |

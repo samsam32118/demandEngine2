@@ -21,6 +21,7 @@ import kgraph as K
 import market_net as MN
 import report
 import seo
+import serp as S
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 PASS, FAIL = [], []
@@ -181,6 +182,39 @@ def offline() -> None:
           "date_from" not in seo.Seo(cache_dir="/tmp/x")._geo({}, history=False))
     check("every other call still asks for four years",
           "date_from" in seo.Seo(cache_dir="/tmp/x")._geo({}))
+
+    print("harvesting from who ranks")
+    md = "\n".join([
+        "### Ambulance and Patient Transport Software", "",
+        "Radar Healthcare", "https://radarhealthcare.com › solutions › ambulance", "",
+        "Software that helps ambulance trusts manage quality and compliance "
+        "across every station in the service.", "",
+        "### EMS Software - Prices & Reviews", "",
+        "https://www.getapp.co.uk › directory › ems-software", "",
+        "Compare the best EMS software of 2026 with verified user reviews "
+        "and side by side feature comparisons.", "",
+        "### European Professional Club Rugby", "",
+        "https://en.wikipedia.org › wiki › European_Professional_Rugby", "",
+        "European Professional Club Rugby is the governing body organising "
+        "the two major club rugby union tournaments in Europe."])
+    got = S.parse_markdown(md)
+    check("organic results are recovered from the rendered page",
+          len(got) == 3, f"{len(got)}")
+    check("the domain is read off the breadcrumb",
+          [r.domain for r in got]
+          == ["radarhealthcare.com", "getapp.co.uk", "wikipedia.org"],
+          str([r.domain for r in got]))
+    check("the heading above becomes the title",
+          got[0].title.startswith("Ambulance and Patient"))
+    check("the snippet is the first substantial line below",
+          "ambulance trusts" in got[0].snippet)
+    check("hosts that rank everywhere and sell nothing are dropped first",
+          [r.domain for r in S.plausible_vendors(got)]
+          == ["radarhealthcare.com", "getapp.co.uk"])
+    check("www and bare subdomains are stripped",
+          S._registrable("www.Example.CO.UK") == "example.co.uk")
+    check("a page with neither title nor snippet is not a result",
+          S.parse_markdown("https://nothing.com › x") == [])
 
     print("budget and credentials")
     s = seo.Seo(cache_dir="/nonexistent-cache", max_spend_usd=0.05,
