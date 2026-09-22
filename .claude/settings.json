@@ -1,0 +1,20 @@
+{
+  "extraKnownMarketplaces": {
+    "typesafe-ai": {
+      "source": {
+        "source": "github",
+        "repo": "typesafe-ai/skills"
+      }
+    },
+    "anthropic-agent-skills": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/skills"
+      }
+    }
+  },
+  "enabledPlugins": {
+    "typesafe@typesafe-ai": true,
+    "example-skills@anthropic-agent-skills": true
+  }
+}
