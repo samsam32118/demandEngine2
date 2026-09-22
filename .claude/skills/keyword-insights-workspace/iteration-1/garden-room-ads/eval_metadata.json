@@ -1,0 +1,34 @@
+{
+  "eval_id": 1,
+  "eval_name": "garden-room-ads",
+  "prompt": "we're about to drop \u00a34k into google ads for garden rooms (uk, we build them) and i want to know what we're walking into before we spend it. what are people actually searching and where does the money go. write it up for me",
+  "assertions": [
+    {
+      "text": "The deliverable is a markdown file, not just chat output"
+    },
+    {
+      "text": "Findings cite real monthly search volumes for named keywords"
+    },
+    {
+      "text": "Findings cite real click prices (CPC or top-of-page bid)"
+    },
+    {
+      "text": "The report states what the research actually cost"
+    },
+    {
+      "text": "At least one finding is about what searchers are trying to do, not just how many there are"
+    },
+    {
+      "text": "No single observation is restated more than twice as separate findings"
+    },
+    {
+      "text": "The report says what it does NOT know, or what it checked and could not confirm"
+    },
+    {
+      "text": "The data is United Kingdom, not United States (location is stated or GBP figures are used)"
+    },
+    {
+      "text": "The report connects its findings to where the GBP4k of ad budget would go"
+    }
+  ]
+}

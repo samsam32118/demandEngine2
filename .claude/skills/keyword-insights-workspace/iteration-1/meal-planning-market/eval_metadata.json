@@ -1,0 +1,31 @@
+{
+  "eval_id": 0,
+  "eval_name": "meal-planning-market",
+  "prompt": "I'm thinking about building something in the meal planning space but honestly I have no idea if there's anything actually there or if it's a graveyard. Can you dig into it properly and give me a writeup I can send my cofounder? She'll want to see the numbers, not vibes.",
+  "assertions": [
+    {
+      "text": "The deliverable is a markdown file, not just chat output"
+    },
+    {
+      "text": "Findings cite real monthly search volumes for named keywords"
+    },
+    {
+      "text": "Findings cite real click prices (CPC or top-of-page bid)"
+    },
+    {
+      "text": "The report states what the research actually cost"
+    },
+    {
+      "text": "At least one finding is about what searchers are trying to do, not just how many there are"
+    },
+    {
+      "text": "No single observation is restated more than twice as separate findings"
+    },
+    {
+      "text": "The report says what it does NOT know, or what it checked and could not confirm"
+    },
+    {
+      "text": "The report reaches a clear verdict on whether there is a market here, rather than only listing data"
+    }
+  ]
+}
