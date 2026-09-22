@@ -129,3 +129,55 @@ The report's trail diagram shows the chase: green nodes answered their
 question and the loop went deeper from them; orange nodes did not, and the
 loop returned to the seed and took a different thread. A dead end also
 discards the keywords it brought in — see `evals/LEDGER.md`, it-3.
+
+
+## The market network
+
+The keyword graph says what is in a market. The network says what that
+means. They are different objects and both are needed: the first is
+measurement, the second is inference.
+
+```
+demand_real ──┬─> o_money      (advertisers pay more than in a typical market)
+              ├─> o_crowd      (more advertisers compete than is typical)
+              │
+intent_legible┼─> o_vague      (the biggest terms do not reveal intent)
+              ├─> o_gradient   (narrowing changes the click price sharply)
+              ├─> o_brand  <───┤
+category_open ┼─> o_spread     (searching spreads across many terms)
+              │
+free_substitute -> o_diy       (searches look for free or manual routes)
+growing ─────────> o_up        (more searching than a year ago)
+
+  all five ──────> paid_viable
+  three ─────────> incumbents_hold_it
+```
+
+**Latent** properties are what a reader wants to know and no instrument
+measures. **Observed** nodes are what the keyword data sees. **Decision**
+nodes are conclusions, which is why nothing hangs below them.
+
+Every table row is one Jev question — "given that people here will pay and
+the words do not reveal intent, can search ads pay for themselves?" — and
+all 63 of them fit in one request for about $0.0006. Inference enumerates
+the five latent roots, thirty-two states, exactly.
+
+### Why there is no threshold anywhere
+
+Code computes a statistic and states it plainly: *"advertisers here pay
+about $16.08 for a click, weighted by how much each term is searched."*
+Whether that is a lot is a question about the wider world, and this skill
+has measured a handful of markets while the model has seen the
+distribution. So the reading goes to Jev, whose answer enters the network as
+**virtual evidence** — the correct formalism for "0.8 sure", rather than
+forcing a true/false through a number the author picked.
+
+### What the structure elicitation found
+
+Asked which property each measurement is evidence about, Jev agreed with six
+of eight hand-drawn edges. It moved `o_spread` from `intent_legible` to
+`category_open` (a market whose searching has not consolidated into a few
+terms is one whose vocabulary is unsettled), and it wanted `o_brand` under
+`intent_legible` rather than `category_open` — which is right, because a
+search naming a company is about as legible as intent gets. That one became
+a two-parent node, since it is evidence about both.

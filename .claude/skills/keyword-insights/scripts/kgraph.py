@@ -663,6 +663,57 @@ class Graph:
             })
         return sorted(rows, key=lambda r: -r["volume"])
 
+    def stats(self) -> dict:
+        """Everything the network's observed nodes are evidence about.
+
+        Arithmetic only. Whether any of these numbers is large is a question
+        about the wider world, and this module has measured one market.
+        """
+        rows = self.topic_rows()
+        certain = self.certain
+        priced = [k for k in self.keywords.values() if k.volume > 0]
+        comp = [k.competition_index for k in priced
+                if k.competition_index is not None]
+        vol = max(self.total_volume, 1)
+        clear = max(self.certain_volume, 1)
+        top5 = sorted(self.keywords.values(), key=lambda k: -k.volume)[:5]
+
+        trend = weighted_trend(priced)
+        ss = sum(k.volume for k in certain if k.job == "self_serve")
+
+        best_lift = 0.0
+        example = ""
+        for topic in {k.topic for k in certain if k.topic}:
+            bare = self.keywords.get(topic)
+            if not bare or bare.cpc <= 0:
+                continue
+            for kw in certain:
+                if kw.topic != topic or kw.cpc <= 0 or kw.term == topic:
+                    continue
+                lift = kw.cpc / bare.cpc
+                if lift > best_lift:
+                    best_lift = lift
+                    example = (f"\u201c{bare.term}\u201d at "
+                               f"${bare.cpc:.2f} against "
+                               f"\u201c{kw.term}\u201d at ${kw.cpc:.2f}")
+        return {
+            "click_price": round(click_price(priced), 2) if priced else None,
+            "max_cpc": round(max((k.cpc for k in priced), default=0.0), 2),
+            "competition": (sum(comp) / len(comp)) if comp else None,
+            "paid_share": share(sum(1 for k in priced if k.cpc > 0),
+                                len(priced)) if priced else None,
+            "branded_share": share(
+                sum(k.volume for k in certain if k.entities), clear),
+            "brands": self.confirmed_entities[:8],
+            "self_serve_share": share(ss, clear),
+            "unclear_share": share(vol - self.certain_volume, vol),
+            "growth": growth(trend),
+            "topics": len(rows) or None,
+            "top5_share": share(sum(k.volume for k in top5), vol),
+            "gradient": round(best_lift, 2) if best_lift > 0 else None,
+            "gradient_example": example,
+        }
+
     # -- persistence ------------------------------------------------------
 
     def to_dict(self) -> dict:

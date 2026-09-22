@@ -18,6 +18,7 @@ import insights
 import jev
 import judge
 import kgraph as K
+import market_net as MN
 import report
 import seo
 
@@ -216,6 +217,45 @@ def offline() -> None:
           "Checked, and it did not hold" in md or
           all(c.survived() for c in claims))
     check("report shows the trail", "mermaid" in md)
+
+    print("the market network")
+    # A uniform net must be a net that concludes nothing.
+    flat = MN.Net(cpt={MN.row_key(n, st): 0.5 for n, ps in MN.PARENTS.items()
+                       for st in MN.assignments(ps)})
+    check("a uniform network concludes nothing",
+          all(abs(v - 0.5) < 1e-12 for v in flat.posterior({}).values()))
+    check("virtual evidence of 0.5 is worth nothing",
+          abs(flat.posterior({"o_money": 0.5})["demand_real"] - 0.5) < 1e-12)
+
+    # One hand-computable Bayes update, so the engine is checked against
+    # arithmetic rather than against itself.
+    hand = MN.Net(cpt=dict(flat.cpt))
+    hand.cpt[MN.row_key("demand_real", ())] = 0.3
+    hand.cpt[MN.row_key("o_money", (True,))] = 0.9
+    hand.cpt[MN.row_key("o_money", (False,))] = 0.1
+    check("inference matches Bayes by hand",
+          abs(hand.posterior({"o_money": 1.0})["demand_real"]
+              - 0.27 / 0.34) < 1e-9,
+          f"{hand.posterior({'o_money': 1.0})['demand_real']:.4f}")
+    check("an uninformative measurement is worth no bits",
+          flat.expected_gain("o_crowd", ["paid_viable"]) == 0.0)
+    check("an informative one is worth some",
+          hand.expected_gain("o_money", ["demand_real"]) > 0.01)
+    check("a belief already held firmly is worth little to pin down",
+          hand.expected_gain("o_money", ["demand_real"], {"o_money": 0.99})
+          < hand.expected_gain("o_money", ["demand_real"]))
+    check("attribution sums toward the movement it explains",
+          abs(sum(d for _, d in hand.attribution(
+              "demand_real", {"o_money": 1.0}))) > 0.0)
+    check("every observation has a parent among the latent properties",
+          all(set(MN.PARENTS[o]) <= set(MN.LATENT) for o in MN.OBSERVED))
+    check("no decision is a parent of anything",
+          all(d not in sum(MN.PARENTS.values(), ()) for d in MN.DECISION))
+    check("every probe tag maps to a real observation",
+          all(v in MN.OBSERVED for v in MN.PROBE_INFORMS.values()))
+    check("readings are produced for measurements that exist",
+          set(MN.readings({"click_price": 1.0, "growth": 1.1}))
+          == {"o_money", "o_up"})
 
     print("question shapes")
     try:

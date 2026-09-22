@@ -23,6 +23,7 @@ from typing import Sequence
 
 import insights
 import judge
+import market_net as MN
 import kgraph as K
 
 n, usd, pct = insights.n, insights.usd, insights.pct
@@ -139,6 +140,59 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
              f"make, so the same data judged for a different reader would "
              f"keep a different set.")
     L.append("")
+
+    # ---- the answer ------------------------------------------------------
+    verdict = manifest.get("verdict") or {}
+    prior = manifest.get("prior") or {}
+    if verdict:
+        L.append("## What this means")
+        L.append("")
+        L.append(
+            "These are not summaries of the findings below. They come from a "
+            "small network of the things a market can be — whether people "
+            "here will pay, whether the words reveal what anyone wants, "
+            "whether buyers have settled on suppliers — whose probability "
+            "tables were supplied by the judgment model in a single request, "
+            "and into which every measurement below enters as evidence. The "
+            "numbers are what that network concludes.")
+        L.append("")
+        L.append("| | before measuring | after | |")
+        L.append("|---|---:|---:|---|")
+        for node, text in MN.DECISION.items():
+            if node not in verdict:
+                continue
+            was, now = prior.get(node, 0.5), verdict[node]
+            arrow = ("rose" if now > was + 0.02 else
+                     "fell" if now < was - 0.02 else "held")
+            L.append(f"| **{text.capitalize()}** | {was:.0%} | "
+                     f"**{now:.0%}** | {arrow} |")
+        L.append("")
+
+        attribution = manifest.get("attribution") or {}
+        readings = manifest.get("readings") or {}
+        for node, text in MN.DECISION.items():
+            moves = [(n, d) for n, d in attribution.get(node, [])
+                     if abs(d) >= 0.01][:3]
+            if not moves:
+                continue
+            L.append(f"**{text.capitalize()}** — what moved it:")
+            L.append("")
+            for name, delta in moves:
+                direction = "toward" if delta > 0 else "against"
+                L.append(f"- `{delta:+.2f}` {direction} — "
+                         f"{readings.get(name, MN.OBSERVED.get(name, name))}")
+            L.append("")
+
+        L.append("The latent properties these rest on, as the network reads "
+                 "them from the measurements:")
+        L.append("")
+        L.append("| property | before | after |")
+        L.append("|---|---:|---:|")
+        for node, text in MN.LATENT.items():
+            if node in verdict:
+                L.append(f"| {text.capitalize()} | {prior.get(node, 0.5):.0%} "
+                         f"| {verdict[node]:.0%} |")
+        L.append("")
 
     # ---- findings -------------------------------------------------------
     L.append("## What the data says")
@@ -259,6 +313,24 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
         "question at a time. No language model wrote any of it, which is "
         "why the same keyword run twice returns the same report.")
     L.append("")
+    unsplittable = manifest.get("unsplittable_rows") or []
+    if verdict:
+        L.append(
+            f"The probabilities at the top come from a network of "
+            f"{len(MN.LATENT)} hidden properties, {len(MN.OBSERVED)} "
+            f"measurements and {len(MN.DECISION)} conclusions. Its "
+            f"probability tables were supplied zero-shot by the judgment "
+            f"model — no training data, no expert interviews — and its "
+            f"inference is exact enumeration in code. **Its calibration is "
+            f"unverified.** The model is trained for calibration, but this "
+            f"network is not a published benchmark, so there is no "
+            f"established answer to check against. Treat the direction and "
+            f"the size of a movement as the signal, and the absolute figure "
+            f"as an estimate."
+            + (f" {len(unsplittable)} of its table rows came back without a "
+               f"clear answer either way, and those rows sit at even odds."
+               if unsplittable else ""))
+        L.append("")
     L.append(
         "The two tests worth knowing about: a statement is **swapped** — its "
         "subject replaced with an unrelated one — and kept only if it then "

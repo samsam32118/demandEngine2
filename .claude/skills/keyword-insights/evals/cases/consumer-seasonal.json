@@ -4,5 +4,13 @@
   "asker": "someone deciding whether to sell into this market",
   "iterations": 2,
   "why": "A consumer market with huge volume and almost no advertiser money. A method tuned on software should not mistake cheap attention for demand.",
-  "expect": {"min_findings": 3, "max_repeats_of_one_kind": 2}
+  "expect": {
+    "min_findings": 3,
+    "max_repeats_of_one_kind": 2,
+    "must_mention": [
+      "What this means",
+      "what moved it",
+      "calibration is unverified"
+    ]
+  }
 }

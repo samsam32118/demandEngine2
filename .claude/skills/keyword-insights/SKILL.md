@@ -99,6 +99,57 @@ tuned number but the point at which the model says yes rather than no.
 
 See `references/jev-contract.md` before changing any question.
 
+## The answer, not just the facts
+
+A report that lists facts leaves the reader to do the reasoning. This one
+opens with the conclusion:
+
+```
+| Buying customers here with search ads can pay for itself | 69% | 54% | fell |
+
+what moved it:
+  -0.12 against — 16% of the searching whose intent is clear is people
+                  solving this without buying anything
+  -0.08 against — Google rates competition at 36 out of 100
+  +0.06 toward  — the last twelve months ran at 1.12x the twelve before
+```
+
+That comes from a small Bayes network over the things a market can be — will
+people here pay, do the words reveal what anyone wants, have buyers settled
+on suppliers, is there a free route, is it growing. **Jev supplies every
+probability table in one request**; the measurements enter as evidence; code
+does exact inference.
+
+The idea is Frank Dellaert's: a Choice over outcomes is exactly the shape of
+a conditional probability table row, so a language model can supply a whole
+network zero-shot, and a conventional engine then answers an unbounded
+family of queries **without another model call**. It is this skill's own
+contract — code counts, Jev concludes — at the level of a joint distribution
+rather than thirteen separate judgments.
+
+Three things fall out of it that flat judging could not give:
+
+- **Coherence.** Findings come from one distribution, so they cannot
+  contradict each other.
+- **Free re-inference.** After the first request the tables are cached, so
+  updating the whole picture with new evidence costs nothing. The loop
+  re-infers every iteration for about a hundredth of a cent.
+- **A principled next probe.** The DECIDE step computes **expected entropy
+  reduction** — how many bits answering a question would remove from what
+  the reader came to find out — instead of asking a model to rate it.
+
+**The structure was audited, not assumed.** Asked which property each
+measurement is evidence about, Jev agreed with six of eight hand-drawn edges
+and corrected two, both correctly. That cost $0.000078. Asked which
+properties bear on each conclusion, it gave two of them identical answers —
+which is the model saying the data cannot tell those two apart, and it was
+right, so one was dropped. See `evals/LEDGER.md`, it-11.
+
+**Calibration is unverified**, and the report says so. This network is not a
+published benchmark, so there is no established answer to check against.
+Direction and size of movement are the signal; the absolute figure is an
+estimate.
+
 ## The graph
 
 Two axes and one set of names. Every finding is a statement about this
@@ -237,6 +288,7 @@ improvements have already been tried, and several of them made things worse.
 | `scripts/kgraph.py` | the graph and all the arithmetic. No judgment |
 | `scripts/judge.py` | every Jev question in the skill |
 | `scripts/insights.py` | claim templates and the follow-up table |
+| `scripts/market_net.py` | the Bayes net: variables, structure, Jev-supplied tables, exact inference |
 | `scripts/report.py` | the markdown |
 | `scripts/jev.py` | typed Jev client, stdlib only |
 | `scripts/selftest.py` | offline and live checks |

@@ -3,6 +3,14 @@
   "seed": "hvac dispatch software",
   "asker": "a founder who already has customers here and wants to know how big it gets",
   "iterations": 2,
-  "why": "A real but tiny market — eleven keywords. The failure mode is stating conclusions in the same confident register as a market a thousand times the size.",
-  "expect": {"max_findings": 6, "max_repeats_of_one_kind": 2}
+  "why": "A real but tiny market \u2014 eleven keywords. The failure mode is stating conclusions in the same confident register as a market a thousand times the size.",
+  "expect": {
+    "max_findings": 6,
+    "max_repeats_of_one_kind": 2,
+    "must_mention": [
+      "What this means",
+      "what moved it",
+      "calibration is unverified"
+    ]
+  }
 }

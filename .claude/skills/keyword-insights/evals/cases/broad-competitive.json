@@ -8,7 +8,10 @@
     "min_findings": 3,
     "max_repeats_of_one_kind": 2,
     "must_mention": [
-      "do not reveal what the person wants"
+      "do not reveal what the person wants",
+      "What this means",
+      "what moved it",
+      "calibration is unverified"
     ],
     "must_not_mention": [
       "asana demand has already picked"

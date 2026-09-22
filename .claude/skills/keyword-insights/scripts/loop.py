@@ -37,6 +37,7 @@ import insights
 import jev
 import judge
 import kgraph as K
+import market_net as MN
 import report as report_mod
 import seo
 
@@ -80,6 +81,10 @@ class Run:
         self.chased: set[str] = set()
         self.dead_tags: set[str] = set()
         self.claims: list[judge.Claim] = []
+        self.net: MN.Net | None = None
+        self.evidence: dict[str, float] = {}
+        self.verdict: dict[str, float] = {}
+        self.prior: dict[str, float] = {}
         self.log: list[str] = []
         self.oriented_at = -1
         self.started = time.time()
@@ -172,12 +177,61 @@ class Run:
         if unjudged:
             self.stage(judge.assign(self.client, g, unjudged, self.args.asker))
         self.oriented_at = len(g.keywords)
+        self.infer()
         covered = K.share(g.certain_volume, g.total_volume)
         self.say(f"      · {len(g.certain):,} of {len(g.judged):,} searches "
                  f"revealed what the person wanted, covering "
                  f"{covered * 100:.0f}% of measured searching")
 
+    def infer(self) -> None:
+        """One request supplies every table and reads every measurement.
+
+        After this, any posterior is arithmetic. That is the whole point:
+        the loop re-infers on every iteration, and on every re-inference
+        after the first the tables come from cache, so updating the whole
+        picture with new evidence costs nothing.
+        """
+        readings = MN.readings(self.graph.stats())
+        questions = {**MN.cpt_questions(), **MN.observation_questions(readings)}
+        result = self.client.ask(
+            {"domain": "commercial markets people search for on Google"},
+            questions)
+        self.stage(judge.Stage(
+            "infer", len(questions), result.usage,
+            [f"{len(MN.cpt_questions())} table rows, "
+             f"{len(readings)} measurements read"]))
+        self.net = MN.build(result)
+        self.evidence = MN.read_evidence(result, list(readings))
+        self.prior = self.net.posterior({})
+        self.verdict = self.net.posterior(self.evidence)
+        for name in MN.DECISION:
+            self.say(f"      · P({name}) "
+                     f"{self.prior[name]:.2f} \u2192 {self.verdict[name]:.2f}")
+
     # -- DECIDE ----------------------------------------------------------
+
+    def choose(self, offer) -> tuple[object, judge.Stage]:
+        if not self.net or not offer:
+            return None, judge.Stage("decide:bits", 0, jev.Usage())
+        targets = list(MN.DECISION)
+        scored = []
+        for thread in offer:
+            tag = thread.key.rsplit("->", 1)[-1]
+            node = MN.PROBE_INFORMS.get(tag)
+            bits = (self.net.expected_gain(node, targets, self.evidence)
+                    if node else 0.0)
+            scored.append((bits, node, thread))
+        scored.sort(key=lambda x: -x[0])
+        bits, node, thread = scored[0]
+        if bits <= 1e-6:
+            return None, judge.Stage(
+                "decide:bits", 0, jev.Usage(),
+                ["nothing on the table would settle anything the reader "
+                 "came for"])
+        return thread, judge.Stage(
+            "decide:bits", 0, jev.Usage(),
+            [f"worth {bits:.3f} bits about what the reader came for "
+             f"(via {node})"])
 
     def find_claims(self) -> list[judge.Claim]:
         self.say("  DECIDE   testing every claim the data could support")
@@ -233,9 +287,19 @@ class Run:
 
             offer = last_children or self.open
             offer = [t for t in offer if t.key not in self.chased] or self.open
-            thread, st = judge.decide(self.client, self.graph, offer,
-                                      self.picture(), a.asker)
+
+            # Value of information, computed rather than guessed. Each open
+            # question is scored by how many bits of uncertainty answering it
+            # would remove from what the reader came to find out. Only when
+            # nothing on the table would move the network at all does this
+            # fall back to asking Jev to rate the options — the arithmetic is
+            # exact where it applies, and it costs no request.
+            thread, st = self.choose(offer)
             self.stage(st)
+            if thread is None and st.name == "decide:bits":
+                thread, st = judge.decide(self.client, self.graph, offer,
+                                          self.picture(), a.asker)
+                self.stage(st)
             if thread is None:
                 self.say("  STOP     nothing left worth buying — the "
                          "remaining budget goes unspent")
@@ -325,6 +389,15 @@ class Run:
             "volume_certain": self.graph.certain_volume,
             "claims_generated": len(self.claims),
             "claims_kept": sum(1 for c in self.claims if c.survived()),
+            "verdict": {k: round(v, 3) for k, v in self.verdict.items()},
+            "prior": {k: round(v, 3) for k, v in self.prior.items()},
+            "evidence": {k: round(v, 3) for k, v in self.evidence.items()},
+            "readings": MN.readings(self.graph.stats()),
+            "attribution": {
+                d: [(n, round(x, 3)) for n, x in
+                    (self.net.attribution(d, self.evidence) if self.net else [])]
+                for d in MN.DECISION},
+            "unsplittable_rows": (self.net.low_confidence if self.net else []),
             "trail": [asdict(t) for t in self.trail],
         }
 

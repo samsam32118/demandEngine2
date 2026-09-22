@@ -328,3 +328,116 @@ finding that did not survive.
 Refreshing the frozen fixtures with the longer history cost $0.74, which is
 what an eval suite costs when the shape of the data changes. It does not
 recur.
+
+---
+
+## it-11 — a joint model instead of thirteen separate opinions
+
+Until now, Jev answered about thirteen independent questions and code
+composed them with `and`. That is flat: findings could not constrain one
+another, evidence could not propagate, and any question the report did not
+anticipate cost another request.
+
+Frank Dellaert's observation is that a Choice over outcomes is exactly the
+shape of a conditional probability table row, so one batched request can
+supply a whole Bayes network zero-shot, and a conventional engine then
+answers an unbounded family of queries with **no further model call**. That
+is this skill's own contract at the level of a joint distribution.
+
+Five latent properties, eight measurements, two conclusions. 63 table rows,
+one request, **$0.0006**. Inference enumerates the five roots — thirty-two
+states — exactly, in pure Python.
+
+### The tables diagnosed the questions
+
+First elicitation: the prior for `growing` came back **0.00**. No market
+ever grows. `free_substitute` 0.07, `intent_legible` 0.12, and `o_money`
+0.10 against 0.01 — barely informative.
+
+Not a model failure. `growing` was asking *"demand is larger this year than
+last, **and rising rather than merely fluctuating**"* — two claims bundled —
+of a market with nothing known about it. Read literally, with no reference
+class, the honest answer is no. And a prior **is** a reference class: it is
+the base rate over all markets, so it has to be asked as one.
+
+Reframed: every statement made atomic and, where it needs one, comparative
+("advertisers pay more per click here than in a typical market"); root
+questions posed as *"think of every commercial market people search for on
+Google; one is picked at random"*.
+
+| | before | after |
+|---|---|---|
+| prior, `growing` | 0.00 | 0.42 |
+| prior, `demand_real` | 0.66 | 0.92 |
+| informative measurements | 4 of 8 | **7 of 8** |
+
+### The structure was audited for $0.000078
+
+Asked which property each measurement is evidence about, Jev agreed with six
+of eight hand-drawn edges and corrected two — `o_spread` to `category_open`,
+and `o_brand` to a second parent under `intent_legible`, since a search
+naming a company is both a settled category and legible intent. Both
+corrections were right. After them, `o_spread`'s spread went from 0.21 to
+0.52.
+
+"I guessed the structure" is an expensive thing to leave unchecked when
+checking it costs eight hundredths of a cent.
+
+### Two conclusions were dropped because the model said they were empty
+
+`content_viable` — can you earn customers by being found? Asked which
+properties bear on it, Jev gave the identical sign pattern it gave paid
+advertising, at near-total confidence. That is the model saying nothing here
+tells the two apart, and it is right: keyword data says what people want and
+what a click costs, and nothing whatever about whether you could rank. A
+number for it would have asserted something the instrument cannot see.
+
+`niche_entry` returned 0.26–0.38 confidence on every property — a badly
+specified variable, not a hard one. Its replacement `head_is_a_trap` came
+back with a **flat table**, 0.58 to 0.69 across all eight rows. Also right:
+whether the head term is a trap turns on the measured price gap between head
+and tail, which the data states outright rather than hiding.
+
+Two nodes that move beat three where one does not.
+
+| node | CPT spread | kept |
+|---|---|---|
+| `paid_viable` | 0.91 | yes |
+| `incumbents_hold_it` | 0.79 | yes |
+| `head_is_a_trap` | 0.11 | no |
+
+### The DECIDE step is now arithmetic
+
+Expected entropy reduction over the two conclusions, computed exactly,
+replaces asking a model to rate how useful a probe would be. First version
+scored an already-observed node at zero and stopped the loop after one
+iteration every time — wrong semantics: a probe does not supply a missing
+observation, it **settles one already held softly**. Weighing each outcome by
+how likely it currently looks fixed it. The loop now picks, for example, a
+0.297-bit question about whether searchers still name companies.
+
+### What it reads on a market with a known answer
+
+`sourdough starter`, from the data alone:
+
+| | before | after |
+|---|---:|---:|
+| Many people here solve this themselves for free | 36% | **77%** |
+| People here are willing to pay someone | 92% | 74% |
+| More people search for this than a year ago | 43% | 95% |
+| **Search ads can pay for themselves** | 69% | **54%** |
+
+It inferred that home baking is a do-it-yourself market, and said which
+measurement did it (−0.12 from the free-route share).
+
+**Calibration remains unverified** and the report says so. The Asia network
+Dellaert demonstrated on is famous enough to sit in any training set; this
+one is not, which removes that taint and removes the reassurance with it.
+The evals check that posteriors move the right way under evidence, which is
+a weaker claim than being right.
+
+| metric | it-10 | it-11 |
+|---|---|---|
+| selftest | 43 | **54** |
+| jev eval checks | 9/9 | **18/18** |
+| cost of re-inferring after new evidence | one request | **cached — $0.0003** |
