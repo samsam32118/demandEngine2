@@ -575,31 +575,55 @@ def generate(graph: K.Graph) -> list[Claim]:
             top_examples, ranked[0], "ambiguity")
 
     # ---- how settled is this market? ------------------------------------
-    settled = [(t, rows[t]["branded_share"], rows[t]["volume"])
-               for t in by_topic if t in rows and rows[t]["volume"] > 0]
+    #
+    # Settled is a statement about buyers, so it is measured among the
+    # people shopping in each topic, as `offer_open` is. Over all of a
+    # topic's searching it was a tautology: a topic that is a definition
+    # names no company because nobody is buying anything there, and
+    # "“bim software” is settled and “building information management” is
+    # not" led the `cad to bim` report — 0% branded, 0% shopping (it-23).
+    # A topic needs two shopping searches to be a group of buyers.
+    settled = []
+    for t, kws in by_topic.items():
+        shop = [k for k in kws if k.job in K.BIDDABLE and k.volume > 0]
+        vol = sum(k.volume for k in shop)
+        if len(shop) >= 2 and vol > 0:
+            named = sum(k.volume for k in shop if k.entities)
+            settled.append((t, K.share(named, vol), vol))
     if settled:
         most = max(settled, key=lambda x: (x[1], x[2]))
         least = min(settled, key=lambda x: (x[1], -x[2]))
         all_brands = sorted({e for k in graph.certain for e in k.entities})
-        if most[0] != least[0]:
+        if most[0] != least[0] and round(most[1], 2) > round(least[1], 2):
             add("market|settled",
                 f"\u201c{most[0]}\u201d is settled and "
-                f"\u201c{least[0]}\u201d is not: {pct(most[1])} of "
-                f"\u201c{most[0]}\u201d searching names a company outright, "
-                f"against {pct(least[1])} of \u201c{least[0]}\u201d "
-                f"({n(least[2])} searches a month).",
+                f"\u201c{least[0]}\u201d is not: {pct(most[1])} of the "
+                f"people shopping for \u201c{most[0]}\u201d name a company "
+                f"outright, against {pct(least[1])} of those shopping for "
+                f"\u201c{least[0]}\u201d ({n(least[2])} shopping searches "
+                f"a month).",
                 f"Buyers have settled on who supplies \u201c{most[0]}\u201d "
                 f"but not \u201c{least[0]}\u201d — the same market is "
                 f"closed in one place and open in another.",
                 f"Buyers are about equally settled on who supplies every "
                 f"part of this market.",
-                {"most_branded": {"topic": most[0], "branded_share": most[1],
-                                  "searches": most[2]},
+                {"most_branded": {"topic": most[0],
+                                  "shoppers_naming_a_company": round(
+                                      most[1], 3),
+                                  "shopping_searches": most[2]},
                  "least_branded": {"topic": least[0],
-                                   "branded_share": least[1],
-                                   "searches": least[2]},
+                                   "shoppers_naming_a_company": round(
+                                       least[1], 3),
+                                   "shopping_searches": least[2]},
                  "brands_found": all_brands[:10]},
-                _examples(by_topic[least[0]]), least[0], "settled")
+                _examples([k for k in by_topic[least[0]]
+                           if k.job in K.BIDDABLE]), least[0], "settled")
+
+    # ---- where does nobody name a company? ------------------------------
+    unbranded = [(t, rows[t]["branded_share"], rows[t]["volume"])
+                 for t in by_topic if t in rows and rows[t]["volume"] > 0]
+    if len(unbranded) >= 2:
+        least = min(unbranded, key=lambda x: (x[1], -x[2]))
         # Unbranded is not the same as open. On answerthepublic.com the
         # least branded topic was "keywords" — 267,160 searches a month,
         # nobody's name on it — and 2% of those searches were anyone buying
@@ -744,8 +768,15 @@ def generate(graph: K.Graph) -> list[Claim]:
             _examples(richest.keywords), richest.topic, "money_seat")
 
     # ---- is the free route the real competitor? -------------------------
+    #
+    # "The competitor is doing without" is a comparison, so code makes it:
+    # more of the searching must be people doing it themselves than people
+    # shopping. Asked of 6% self-serve against 9% shopping, the account
+    # test picked "a substantial part of the demand is avoiding paying" at
+    # 0.83 — a magnitude, which Jev cannot judge (it-23).
     ss_vol = mix_total.get("self_serve", 0)
-    if ss_vol:
+    shop_vol = sum(mix_total.get(j, 0) for j in K.BIDDABLE)
+    if ss_vol and ss_vol > shop_vol:
         worst = max(ranked, key=lambda t: rows[t]["job_mix"].get(
             "self_serve", 0.0))
         ss_kws = by_job.get("self_serve", [])
@@ -753,13 +784,15 @@ def generate(graph: K.Graph) -> list[Claim]:
             f"The competitor here is not a company but doing without: "
             f"{pct(K.share(ss_vol, certain_vol))} of the searching with a "
             f"clear intent is people trying to solve it without buying "
-            f"anything, heaviest in \u201c{worst}\u201d at "
+            f"anything — more than the {pct(K.share(shop_vol, certain_vol))} "
+            f"who are shopping — heaviest in \u201c{worst}\u201d at "
             f"{pct(rows[worst]['job_mix'].get('self_serve', 0))}.",
             f"A substantial part of the demand in this market is people "
             f"looking for a way to avoid paying anyone for it.",
             f"People in this market accept that solving the problem means "
             f"paying somebody for it.",
             {"self_serve_share": round(K.share(ss_vol, certain_vol), 3),
+             "shopping_share": round(K.share(shop_vol, certain_vol), 3),
              "heaviest_topic": worst,
              "heaviest_share": round(
                  rows[worst]["job_mix"].get("self_serve", 0), 3),
@@ -908,9 +941,11 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
             # Both halves have to hold for the sentence to mean anything:
             # one part of the market named as settled, another named as
             # open. A gap between two middling shares is not a finding.
-            keep = (ev.get("most_branded", {}).get("branded_share", 0.0)
+            keep = (ev.get("most_branded", {}).get(
+                        "shoppers_naming_a_company", 0.0)
                     >= C["branded_share_high"]
-                    and ev.get("least_branded", {}).get("branded_share", 1.0)
+                    and ev.get("least_branded", {}).get(
+                        "shoppers_naming_a_company", 1.0)
                     <= C["branded_share_low"])
         elif kind == "open":
             keep = ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
@@ -950,10 +985,20 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
             keep = (ev.get("most_branded_share", 0.0) >= C["branded_share_high"]
                     and ev.get("least_branded_share", 1.0)
                     <= C["branded_share_low"])
+        # The where-to-win families have no hand-tuned threshold to hold
+        # them to: each is only built when code has checked its own premise,
+        # so this arm keeps them as built.
         claim.verdict = "kept" if keep else "below threshold"
-        # Rank proxy: how much of the market the claim speaks for.
-        claim.weight = K.share(row.get("volume", ev.get("cell_searches", 0)
-                                       or ev.get("searches", 0)), total)
+        # Rank proxy: how much of the market the claim speaks for. Several
+        # families carry a list under "searches", so only a number counts.
+        size = row.get("volume")
+        if size is None:
+            size = next((ev[k] for k in ("cell_searches", "searches",
+                                         "buyer_searches_a_month",
+                                         "searches_a_month",
+                                         "shopping_searches")
+                         if isinstance(ev.get(k), (int, float))), 0)
+        claim.weight = K.share(size, total)
     return [c for c in claims if c.survived()]
 
 

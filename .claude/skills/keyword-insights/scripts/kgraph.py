@@ -170,6 +170,19 @@ class Keyword:
     offering_confidence: float = 0.0
     offering_certain: bool = False
     entities: list[str] = field(default_factory=list)
+    # Competition, from DataForSEO Labs where it has been asked: how hard
+    # the first page is to reach (0-100, logarithmic), the head term of the
+    # synonym cluster this search belongs to (Ahrefs calls it the parent
+    # topic), Labs' own reading of intent, and how strong the pages already
+    # on page one are. `None` means not measured, which is not the same as
+    # easy.
+    difficulty: int | None = None
+    # The spellings Google counts as this same search (see `add_rows`).
+    aliases: list[str] = field(default_factory=list)
+    parent_topic: str = ""
+    labs_intent: str = ""
+    top10_domain_rank: float | None = None
+    top10_referring_domains: float | None = None
 
     @property
     def money(self) -> float:
@@ -406,6 +419,42 @@ def weighted_trend(keywords: Sequence[Keyword]) -> list[int]:
 # Mining: proposing candidates, never selecting them
 # --------------------------------------------------------------------------
 
+def stem(token: str) -> str:
+    """A crude stem: enough to see that `modelling` and `models` are `model`.
+
+    Only used to decide whether two searches Google already reports with the
+    same numbers are spellings of one another, so it needs to be generous,
+    not correct.
+    """
+    for suffix in ("ings", "ing", "ers", "er", "ed", "es", "s"):
+        if token.endswith(suffix) and len(token) - len(suffix) >= 3:
+            token = token[: -len(suffix)]
+            break
+    token = re.sub(r"(.)\1$", r"\1", token)
+    # `service` and `services` must meet: the plural lost "es", so the
+    # singular loses its final "e".
+    return token[:-1] if token.endswith("e") and len(token) > 4 else token
+
+
+def stems(term: str) -> frozenset[str]:
+    return frozenset(stem(t) for t in tokens(term))
+
+
+def fingerprint(row: dict) -> tuple | None:
+    """What Google reports for a close-variant cluster, when it identifies one.
+
+    Google Keyword Planner gives every close variant of a search — plural,
+    misspelling, synonym — the whole cluster's numbers. Across 48 months a
+    varying series matching exactly is a fingerprint no coincidence produces;
+    a flat one ("10 every month") matches by chance, so it identifies
+    nothing.
+    """
+    trend = row.get("trend") or []
+    if len(trend) < 24 or len(set(trend[-24:])) < 2:
+        return None
+    return (int(row.get("volume") or 0), tuple(trend[-24:]))
+
+
 def tokens(term: str) -> list[str]:
     return [t for t in re.split(r"[^a-z0-9+#]+", term.lower()) if t]
 
@@ -557,6 +606,7 @@ class Graph:
         self.sites: dict[str, Site] = {}
         self.iterations: list[dict] = []
         self.collapsed = 0
+        self.variants_collapsed = 0
         self.add_topic(self.seed, kind="seed", confirmed=True)
 
     # -- mutation ---------------------------------------------------------
@@ -575,8 +625,12 @@ class Graph:
         """
         added = 0
         by_shape: dict[tuple[str, ...], str] = {}
-        for term in self.keywords:
+        by_print: dict[tuple, list[str]] = {}
+        for term, kw in self.keywords.items():
             by_shape.setdefault(tuple(sorted(term.split())), term)
+            fp = fingerprint({"trend": kw.trend, "volume": kw.volume})
+            if fp is not None:
+                by_print.setdefault(fp, []).append(term)
         for row in rows:
             term = row["term"]
             shape = tuple(sorted(term.split()))
@@ -584,7 +638,28 @@ class Graph:
             if kept is not None and kept != term:
                 self.collapsed += 1
                 continue
+            # The same collapse for close variants. Google reports
+            # `project management software`, `project tracking software`,
+            # `project planning software` and `program management software`
+            # with one identical 48-month series, because they are one
+            # cluster to it; counting each made 43-56% of every market's
+            # volume a double count (it-23). One stem apart and the same
+            # fingerprint is the same search.
+            fp = fingerprint(row)
+            if fp is not None and term not in self.keywords:
+                mine = stems(term)
+                twin = next((t for t in by_print.get(fp, [])
+                             if len(stems(t) ^ mine) <= 2
+                             and len(stems(t) & mine) >= len(mine) - 1),
+                            None)
+                if twin is not None:
+                    self.variants_collapsed += 1
+                    if term not in self.keywords[twin].aliases:
+                        self.keywords[twin].aliases.append(term)
+                    continue
             by_shape.setdefault(shape, term)
+            if fp is not None:
+                by_print.setdefault(fp, []).append(term)
             existing = self.keywords.get(term)
             if existing is None:
                 self.keywords[term] = Keyword(**row)
@@ -599,6 +674,24 @@ class Graph:
                 if existing.cpc == 0 and row.get("cpc"):
                     existing.cpc = row["cpc"]
         return added
+
+    def set_competition(self, rows: Iterable[dict]) -> int:
+        """Lay competition measurements onto keywords already here.
+
+        Kept apart from `add_rows` on purpose: competition is asked about
+        searches the market already holds, and must never add one.
+        """
+        placed = 0
+        for row in rows:
+            kw = self.keywords.get(row.get("term", ""))
+            if kw is None:
+                continue
+            for key in ("difficulty", "parent_topic", "labs_intent",
+                        "top10_domain_rank", "top10_referring_domains"):
+                if row.get(key) not in (None, ""):
+                    setattr(kw, key, row[key])
+            placed += 1
+        return placed
 
     def drop(self, terms: Iterable[str]) -> int:
         """Undo a measurement that answered nothing.
@@ -786,7 +879,17 @@ class Graph:
         evidence. They were two copies of the same loop, and the network's
         iterated a set, so which pair it named on a tie changed between
         runs.
+
+        And it is searched at least as often as the market's typical
+        search. The dearest narrowing is almost always one nobody types —
+        `bim drawing software` at 10 a month — and a price that ten people
+        a month meet is a curiosity, not a second kind of buyer: the
+        critique of the `cad to bim` report named exactly that finding
+        (it-23). The bar is the market's own median, not a number chosen
+        here.
         """
+        sizes = [k.volume for k in self.keywords.values() if k.volume > 0]
+        typical = median(sizes) if sizes else 0
         by_topic: dict[str, list[Keyword]] = defaultdict(list)
         for kw in self.certain:
             if kw.topic and kw.topic not in ("", "none"):
@@ -798,7 +901,7 @@ class Graph:
                 continue
             for kw in kws:
                 if (kw.term == topic or kw.cpc <= 0 or kw.volume <= 0
-                        or kw.volume >= bare.volume):
+                        or kw.volume >= bare.volume or kw.volume < typical):
                     continue
                 lift = kw.cpc / bare.cpc
                 if best is None or lift > best[0]:

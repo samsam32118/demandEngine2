@@ -1,55 +1,41 @@
-"""Who actually ranks for a search — the bridge from a word to a business.
+"""Who actually ranks for a search — the bridge from a word to a business,
+and the first page a newcomer would have to beat.
 
-The most valuable thing this skill can do with $0.09 is spend it on
-`for-site` against a company that is already selling into the market,
-rather than on `for-keywords` against a string. Measured on the same
-market, at the same price:
+Two uses.
+
+**Finding the businesses.** The most valuable thing this skill can do with
+$0.09 is spend it on `for-site` against a company that is already selling
+into the market, rather than on `for-keywords` against a string. Measured on
+the same market, at the same price:
 
     expand "epcr"          ->    31 keywords,   2,100 searches a month
     for-site eso.com       ->   619 keywords, 367,940 searches a month
 
-One hundred and seventy-five times the searching, and it surfaces terms no
-expansion could reach — `electronic health records software` at 40,500 a
-month, which is the market ambulance software actually sits inside and is
-not a phrase anyone would have thought to seed.
+`for-keywords` expands off the *breadth of a string*; `for-site` expands off
+what a live business is *about*, and a business that has invested in ranking
+is evidence that someone is selling here. Invented keywords are hypotheses;
+harvested ones are observed commercial vocabulary.
 
-The reason is not a quirk of the API. `for-keywords` expands off the
-*breadth of a string*, so a niche phrase returns almost nothing —
-`investtech` gave 18 rows, `ambulance software` 25. `for-site` expands off
-what a live business is *about*, and a business that has invested in
-ranking is evidence that someone is selling here. Invented keywords are
-hypotheses; harvested ones are observed commercial vocabulary.
+**Reading page one.** How hard a search is to win is decided by what already
+answers it. A first page of specialist firms is a fight; a first page with a
+Facebook post and a press release on it is a door left open — the weak-spot
+heuristic every niche builder and SERP analyst uses (it-23).
 
-So the seed should be a business, not a word. This module finds the
-businesses.
-
-Stdlib only. The SERP zone in use ignores `brd_json=1` and returns Google's
-rendered page as markdown regardless, so the organic results are recovered
-from that rather than from structured JSON.
+Both come from DataForSEO's SERP API through `seo.Seo`, so every page is
+cached, counted in the ledger and held to the run's budget. This module used
+to scrape Google's rendered page through Bright Data and parse the organic
+results back out of markdown; that broke the rule that the skill runs on
+Jev and DataForSEO alone, and the structured response carries what the
+markdown could not — the ads, the AI overview, the forum and video blocks,
+each typed.
 """
 
 from __future__ import annotations
 
-import hashlib
-import json
-import os
-import re
-import ssl
-import time
-import urllib.error
-import urllib.parse
-import urllib.request
 from dataclasses import dataclass
 from typing import Sequence
 
-BASE = "https://api.brightdata.com/request"
-DEFAULT_ZONE = "serp_api1"
-TOKEN_ENV = "BRIGHTDATA_API_TOKEN"
-
-# A Google results page is tens of kilobytes. Anything under this is the
-# vendor having failed with a 200, not a page with no results on it.
-MIN_BODY = 500
-ZONE_ENV = "BRIGHTDATA_SERP_ZONE"
+import seo as SEO
 
 # Hosts that rank for commercial terms without selling anything. Excluded
 # before Jev sees them, because paying a model to tell you Wikipedia is not
@@ -68,7 +54,7 @@ class SerpError(RuntimeError):
 
 
 class SerpOffline(SerpError):
-    """Offline and the query is not cached."""
+    """Replay-only mode and this page was never fetched."""
 
 
 @dataclass
@@ -78,28 +64,13 @@ class Result:
     domain: str
     url: str
     snippet: str
-    kind: str = ""            # filled by judge.pick_sellers
+    kind: str = ""            # filled by judge.pick_sellers / read_page_one
     kind_confidence: float = 0.0
 
     def as_dict(self) -> dict:
         return {"rank": self.rank, "title": self.title, "domain": self.domain,
                 "url": self.url, "snippet": self.snippet, "kind": self.kind,
                 "kind_confidence": round(self.kind_confidence, 3)}
-
-
-def token() -> str:
-    value = (os.environ.get(TOKEN_ENV) or "").strip()
-    if not value:
-        raise SerpError(f"missing {TOKEN_ENV}")
-    return value
-
-
-def available() -> bool:
-    try:
-        token()
-        return True
-    except SerpError:
-        return False
 
 
 def _registrable(host: str) -> str:
@@ -111,150 +82,67 @@ def _registrable(host: str) -> str:
     return host
 
 
-# Google renders each organic result as a `###` heading, then the source
-# name, then a `https://domain › path › crumb` breadcrumb, then the snippet.
-_CRUMB = re.compile(r"^https://([A-Za-z0-9.\-]+\.[A-Za-z]{2,})(?:\s*›.*)?$")
-_HEADING = re.compile(r"^#{2,4}\s+(.+?)\s*$")
-
-
-def parse_markdown(markdown: str, *, limit: int = 10) -> list[Result]:
-    """Recover organic results from Google's rendered page.
-
-    Keyed on the breadcrumb line, which is the one element every organic
-    result has and no other block reliably does. The nearest heading above
-    it is the title; the first substantial line below it is the snippet.
-    """
-    lines = markdown.splitlines()
+def organic(rows: Sequence[dict], *, limit: int = 10) -> list[Result]:
+    """The organic results on a page, ranked from one, as Results."""
     out: list[Result] = []
-    seen: set[str] = set()
-    for i, line in enumerate(lines):
-        crumb = _CRUMB.match(line.strip())
-        if not crumb:
+    for row in rows:
+        if row.get("type") != "organic" or not row.get("domain"):
             continue
-        domain = _registrable(crumb.group(1))
-        if not domain or domain in seen:
-            continue
-
-        title = ""
-        for back in range(i - 1, max(i - 14, -1), -1):
-            head = _HEADING.match(lines[back].strip())
-            if head:
-                title = head.group(1)
-                break
-        snippet = ""
-        for fwd in range(i + 1, min(i + 12, len(lines))):
-            text = lines[fwd].strip()
-            if (len(text) < 40 or text.startswith(("[", "!", "#", "http"))
-                    or "](" in text):
-                continue
-            snippet = re.sub(r"[_*`]", "", text)[:320]
-            break
-        if not title and not snippet:
-            continue
-        seen.add(domain)
-        out.append(Result(len(out) + 1, title[:180], domain,
-                          f"https://{domain}", snippet))
+        out.append(Result(rank=len(out) + 1, title=row.get("title") or "",
+                          domain=_registrable(row["domain"]),
+                          url=row.get("url") or "",
+                          snippet=row.get("description") or ""))
         if len(out) >= limit:
             break
     return out
 
 
+def organic_rows(rows: Sequence[dict], *, limit: int = 10) -> list[dict]:
+    """The organic results as plain rows — ranked from one, domains without
+    `www.` — for the questions and the data files, which want dicts."""
+    return [{**r.as_dict(), "description": r.snippet}
+            for r in organic(rows, limit=limit)]
+
+
+def features(rows: Sequence[dict]) -> dict:
+    """What Google put on the page besides the organic results.
+
+    Counted, not judged: how many ads (someone pays for this search), and
+    whether an AI overview or a question box sits above the results — both
+    take clicks before any result is seen.
+    """
+    types = [r.get("type") or "" for r in rows]
+    return {"ads": sum(1 for t in types if t == "paid"),
+            "ai_overview": "ai_overview" in types,
+            "questions": "people_also_ask" in types,
+            "video": any(t in ("video", "short_videos") for t in types),
+            "forums": any(t in ("discussions_and_forums", "perspectives")
+                          for t in types),
+            "advertisers": sorted({_registrable(r["domain"]) for r in rows
+                                   if r.get("type") == "paid"
+                                   and r.get("domain")})}
+
+
 class Serp:
-    """A cached Bright Data SERP client."""
+    """Page one for a search, from DataForSEO, through the run's own client."""
 
-    def __init__(self, *, cache_dir: str, offline: bool = False,
-                 timeout: int = 120) -> None:
-        self.cache_dir = cache_dir
-        self.offline = offline
-        self.timeout = timeout
-        self.calls = 0
-        self.cached = 0
+    def __init__(self, client: SEO.Seo) -> None:
+        self.seo = client
 
-    def _key(self, payload: dict) -> str:
-        blob = json.dumps(payload, sort_keys=True)
-        return hashlib.sha256(blob.encode("utf-8")).hexdigest()
-
-    def _read(self, key: str) -> str | None:
-        path = os.path.join(self.cache_dir, key + ".json")
-        if not os.path.exists(path):
-            return None
+    def page(self, query: str) -> list[dict]:
+        """Everything on page one — results, ads, features — in order."""
         try:
-            with open(path, encoding="utf-8") as fh:
-                body = json.load(fh).get("markdown")
-            return body if body and len(body) >= MIN_BODY else None
-        except (OSError, ValueError):
-            return None
-
-    def _write(self, key: str, markdown: str) -> None:
-        try:
-            os.makedirs(self.cache_dir, exist_ok=True)
-            path = os.path.join(self.cache_dir, key + ".json")
-            tmp = path + ".tmp"
-            with open(tmp, "w", encoding="utf-8") as fh:
-                json.dump({"markdown": markdown}, fh)
-            os.replace(tmp, path)
-        except OSError:
-            pass
+            return self.seo.serp(query).rows
+        except SEO.OfflineMiss as exc:
+            raise SerpOffline(str(exc)) from None
+        except SEO.SeoError as exc:
+            raise SerpError(str(exc)) from None
 
     def results(self, query: str, *, country: str | None = None,
                 hl: str = "en", num: int = 10,
                 limit: int = 10) -> list[Result]:
-        params = {"q": query, "hl": hl, "num": str(num)}
-        if country:
-            params["gl"] = country.lower()
-        url = "https://www.google.com/search?" + urllib.parse.urlencode(params)
-        payload = {"zone": os.environ.get(ZONE_ENV, DEFAULT_ZONE),
-                   "url": url, "format": "raw", "data_format": "markdown"}
-        if country:
-            payload["country"] = country.lower()
-
-        key = self._key(payload)
-        cached = self._read(key)
-        if cached is not None:
-            self.cached += 1
-            return parse_markdown(cached, limit=limit)
-        if self.offline:
-            raise SerpOffline(f"offline: no cached SERP for {query!r}")
-
-        body = json.dumps(payload).encode("utf-8")
-        request = urllib.request.Request(
-            BASE, data=body, method="POST",
-            headers={"Authorization": f"Bearer {token()}",
-                     "Content-Type": "application/json"})
-        delay = 1.0
-        last = ""
-        for attempt in range(1, 5):
-            try:
-                with urllib.request.urlopen(
-                        request, timeout=self.timeout,
-                        context=ssl.create_default_context()) as response:
-                    markdown = response.read().decode("utf-8", "replace")
-                self.calls += 1
-                # An empty body is a failure the vendor returns with a 200.
-                # Caching it turns one bad response into a permanent one:
-                # `keyword research tool` returned nothing, was cached, and
-                # every retry replayed the emptiness rather than asking
-                # again. Only a page with something on it is worth keeping.
-                if len(markdown) < MIN_BODY:
-                    last = f"empty body ({len(markdown)} bytes)"
-                    if attempt == 4:
-                        raise SerpError(last) from None
-                    time.sleep(delay)
-                    delay *= 2
-                    continue
-                self._write(key, markdown)
-                return parse_markdown(markdown, limit=limit)
-            except urllib.error.HTTPError as exc:
-                last = f"HTTP {exc.code}: {exc.read().decode('utf-8','replace')[:200]}"
-                if exc.code not in (429, 500, 502, 503, 504) or attempt == 4:
-                    raise SerpError(last) from None
-            except (urllib.error.URLError, TimeoutError, ssl.SSLError) as exc:
-                last = f"network error: {exc}"
-                if attempt == 4:
-                    raise SerpError(last) from None
-            time.sleep(delay)
-            delay *= 2
-        raise SerpError(last or "serp failed")
+        """The organic results. Location and language are the run's own."""
+        return organic(self.page(query), limit=limit)
 
 
 def plausible_vendors(results: Sequence[Result]) -> list[Result]:

@@ -17,9 +17,10 @@ writes two things beside each other:
 
 ```
 insights-cad-to-bim.md          the insights, ranked by value
-insights-cad-to-bim-data/       keywords.csv  offerings.csv  topics.csv
-                                tested.csv    series.csv     trail.csv
-                                network.json  forecast.json  run.json
+insights-cad-to-bim-data/       keywords.csv       offerings.csv  topics.csv
+                                opportunities.csv  page_one.csv   share_of_voice.csv
+                                tested.csv         series.csv     trail.csv
+                                network.json       forecast.json  run.json
 ```
 
 **No language model is involved at any step.** Data comes from DataForSEO;
@@ -99,10 +100,11 @@ real result and an expensive one.
 ## Effort
 
 One dial, 1 to 5, or the names `glance` `quick` `normal` `deep`
-`exhaustive`. It moves five things that have to move together — how many
+`exhaustive`. It moves the things that have to move together — how many
 ranking businesses get harvested, how many probes are allowed, how much of
-the corpus is placed on the two axes, how many claims are tested, and the
-ceiling on spend.
+the corpus is placed on the two axes, how many claims are tested, how many
+first pages are read (the market's largest searches, and its buying
+searches worth most), and the ceiling on spend ($0.40 at 1 to $2.20 at 5).
 
 ```bash
 --effort 1        # or glance
@@ -227,6 +229,22 @@ that outsizes everything the market's own businesses rank for — `how to
 drawings`, 301,000 a month, inherited from "how to draw" when a probe
 combined "how to" with the topic "drawings" (it-22).
 
+**Then every large search is checked against what Google shows for it.**
+The two rules above compare sizes, and size stopped being enough: on `cad
+to bim` a harvested `modelling 3d` at 135,000 a month raised the ceiling the
+second rule compares against, so a probe's `top modelling` (8,100 a month —
+modelling agencies), `modelling jobs` and `what is modelling` passed beneath
+it, and became the report's first three insights. Every practitioner checks
+intent the same way — search it and look — because page one is ranked on
+what the people typing a search go on to click. So the searches that carry
+the market's volume (`ground`: 10 to 50 by effort), and the buying searches
+worth most (`pages`: 10 to 60), are each read against their first page from
+DataForSEO's SERP API, and Jev answers the relevance question again with
+those pages in front of it — same criteria, so "in this market" keeps one
+definition, better evidence. Dropping one lets the next largest into the
+head, so the head is always read. $0.002 a page; `--no-ground` skips it
+(it-23).
+
 **Finding that nobody selling ranks is not a failure.** It is the most
 decisive thing the loop can learn, and it falls through to Google's idea
 list saying so.
@@ -281,6 +299,9 @@ A market with nothing in it is a result.
 | `network.json` | the market network's conclusions before and after measuring, and what moved them |
 | `forecast.json` | Google's forecast for the searches worth bidding on |
 | `run.json` | the run: seed, effort, reader, what every stage cost |
+| `opportunities.csv` | each group of buying searches one page could answer — what it is worth, its difficulty, what holds its first page, and the money sitting on pages not built for it |
+| `page_one.csv` | every first page read — each result, what kind of page it is, and whether the search stayed in the market |
+| `share_of_voice.csv` | which sites take the clicks the buying searches send |
 
 ### The market network
 
@@ -299,6 +320,43 @@ Its conclusions used to open the report. They are in `network.json` now:
 **its calibration is unverified**, and a probability the reader cannot check
 is not an insight — it steers the probes, and the file says what it
 concluded and what moved it.
+
+## Where to win
+
+A critique of the report this skill produced for `cad to bim` found every
+insight true and almost none useful: which topic names brands, how intent
+is mixed, where a click is dearer — statistics about a corpus. The people
+who are good at this start from **where someone could win**, and each has a
+heuristic for it. Each became a family, fed by page one, Labs difficulty
+and share of voice from DataForSEO, and tested like every other finding:
+
+| family | framework | reads | example |
+|---|---|---|---|
+| `start_here` | [Pain Point SEO](https://www.growandconvert.com/seo/pain-point-seo/) (Grow and Convert), [Ahrefs' difficulty](https://ahrefs.com/blog/ahrefs-seo-metrics/), Moore's beachhead | buying searches grouped by **three shared top-ten results** — Google's own judgment that one page can answer them ([SE Ranking's grouping level](https://seranking.com/blog/keyword-clustering/)); code keeps the groups nothing beats on buyer money naming no company, difficulty and first-page weakness at once, and Jev picks among them, each described in words | *Start with "bim modeling services": $50,713 a month of buyer clicks, difficulty 9, page one seven specialist firms* |
+| `open_door` | weak-spot SERP analysis ([Detailed](https://detailed.com/forum-serps/), [Semrush](https://www.semrush.com/blog/finding-serp-weak-spots/)) | the group with the most buyer money on pages not built for it — forum, social, off-target — weighted by position | *The door left open is "bim modeling software": reddit.com at 1* |
+| `weak_open` / `weak_closed` | the same, for the whole market | where buyers' page-one clicks go, by kind of page, weighted by position and by what each group is worth | *Buyers here are answered by businesses built for them* |
+| `customer_cost` | [channel–model fit](https://brianbalfour.com/essays/channel-model-fit-for-user-acquisition) (Brian Balfour) | average buyer click, by what the buyer wants, over the [4.78% bottom-of-funnel lead rate](https://www.growandconvert.com/conversion-rate-optimization/average-seo-conversion-rate/) Grow and Convert measured | *A lead for services costs $749 through search; for software, $103* |
+| `who_owns` / `who_owns_not` | share of voice | Labs' estimate of the clicks each site takes across the buying searches; forums and articles counted in the whole, but not as who a newcomer competes with | *No business owns buyer search here* |
+| `share_of_search` | [share of search](https://ipa.co.uk/effworks/effworksglobal-2020/share-of-search-as-a-predictive-measure) (Les Binet, IPA) | each named brand's share of the branded searching, a year apart | *"revit" is taking share of search from "autocad"* |
+| `switching` | [the four forces](https://jobstobedone.org/the-four-forces/) (Bob Moesta) | "alternatives to X", "X vs", bought for the brands found | *People are looking for a way out of "revit"* |
+| `pattern` | [product-led SEO](https://www.lennysnewsletter.com/p/rethinking-seo-in-the-age-of-ai-eli-schwartz) (Eli Schwartz) | one-slot keyword skeletons with three or more fillers, checked by Jev to be one kind of thing | *Build one page for every "… to revit"* |
+| `new_demand` | why now | searches with no month above 10 three years ago, now at least as large as the market's typical search | *New since 2023: "…"* |
+
+The click split uses [First Page Sage's 2026 CTR by position](https://firstpagesage.com/reports/google-click-through-rates-ctrs-by-ranking-position/)
+as **relative** weights only — studies disagree about the level (27.6% at
+position one in [Backlinko's](https://backlinko.com/google-ctr-stats), 7.1%
+in First Page Sage's after AI overviews) far more than about the shape.
+
+**No weights are chosen anywhere in "where to start".** Code removes every
+group another beats on all three counts at once; what is left is a set of
+genuine trade-offs, and choosing among those is judgment. Two rules came
+from getting it wrong on `cad to bim`: ranked by forum-held clicks alone,
+the first pick was `revit price` — people pricing Autodesk's own product,
+whom no other page can serve — so **only searches naming no company
+count**; and it could never offer the services groups, which hold the
+market's buyer money behind first pages of small specialist firms at
+difficulty under 25, so **difficulty is one of the counts**. Each finding
+says which framework found it, beneath it in the report.
 
 ## What paid search can buy
 
@@ -391,9 +449,20 @@ confident-looking number with no confidence behind it:
 | **swap** | With its subject replaced by an unrelated one, does this still read as fair? | statements that were never about this market |
 | **guessable** | Could someone say this knowing only the market's name? | findings the data did not pay for |
 
-Surprise and stakes are also measured, but only order the results. Surprise
-is evidence about how much a finding matters, not whether it is true —
-gating on it threw away eight true statements in a row.
+Surprise is also measured, but only orders the results: it is evidence
+about how much a finding matters, not whether it is true — gating on it
+threw away eight true statements in a row.
+
+**And a value floor.** Asked what a statement does for the reader —
+nothing, colour, a choice between two paths, or a reversal of the plan they
+came with — a finding is kept only if Jev puts **more than half** its
+weight on the two that change a decision, the same majority the account
+test is won by. True-and-specific-but-colour is the commonest way for a
+finding to be worthless, and the first floor missed it: it asked which
+single level was likeliest while the report printed the level nearest the
+average, and on spread-out answers the two disagree about a third of the
+time — the `cad to bim` report opened with three findings labelled
+*Colour* (it-23).
 
 **Contrasts — "the X is in A, not B."** The findings a person draws first
 are contrasts between two groups, and four families state them:
@@ -424,7 +493,7 @@ paid for. Probes are filled to the brim.
 
 | | typical run |
 |---|---|
-| DataForSEO | one harvest per site plus up to `--iterations` probes, ~$0.09 each, and one closing forecast |
+| DataForSEO | one harvest per site plus up to `--iterations` probes, ~$0.09 each, and one closing forecast; page one at $0.002 a search — at most four times `ground` plus `pages`, 260 at effort 5; Labs difficulty (~$0.012 plus $0.00012 a search) and share of voice (~$0.014) |
 | Jev | $0.005–0.04 — input tokens only, output is free |
 | default `--effort normal` | **~$0.46 and about 25 seconds** |
 
@@ -499,7 +568,8 @@ improvements have already been tried, and several of them made things worse.
 |---|---|
 | `scripts/loop.py` | the OODA driver and the CLI |
 | `scripts/seo.py` | DataForSEO, cached and budgeted, with real billed costs |
-| `scripts/serp.py` | who ranks for a search — the bridge from a word to a business |
+| `scripts/serp.py` | page one for a search, from DataForSEO — who ranks, the ads, the features |
+| `scripts/opportunity.py` | where to win: page-one clusters, the click split, and the practitioner families |
 | `scripts/kgraph.py` | the graph and all the arithmetic. No judgment |
 | `scripts/judge.py` | every Jev question in the skill |
 | `scripts/insights.py` | claim templates and the follow-up table |

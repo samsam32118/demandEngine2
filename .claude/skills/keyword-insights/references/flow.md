@@ -7,9 +7,9 @@ network that turns measurements into an answer.
 Every node is coloured by **who does the work**, because that division is
 the method:
 
-- **orange — the paid APIs.** Every DataForSEO call is about $0.09 whether
-  it carries one keyword or a thousand; the search-results call is billed
-  against a separate daily allowance.
+- **orange — the paid API.** DataForSEO, and nothing else. A keyword call
+  is about $0.09 whether it carries one keyword or a thousand; a first page
+  of Google is $0.002; Labs difficulty is billed per search.
 - **blue — Jev.** Every judgment. No language model appears anywhere.
 - **green — code.** Arithmetic, string handling, budgets, and rendering
   sentences from templates. No judgment.
@@ -28,7 +28,7 @@ flowchart TB
   QSELL -->|"a focused seller"| SITE
   QSELL -->|"nobody sells here —<br/>itself the finding"| EXPAND
 
-  subgraph OBS["OBSERVE — the only billable step"]
+  subgraph OBS["OBSERVE — the keyword calls"]
     direction LR
     SITE["for-site<br/>a live business's whole footprint<br/>619 rows where a word gave 31"]:::money
     EXPAND["expand<br/>Google's idea list for a string<br/>collapses on a niche seed"]:::money
@@ -41,12 +41,18 @@ flowchart TB
   PRICEP --> QREL
   QREL -->|"no, or never asked"| DROPPED["discarded before it can<br/>outvote the market's own words<br/>an unvetted row is not evidence"]:::code
   QREL -->|"yes"| OUTV{"larger than the rest<br/>of the market combined?"}:::code
-  OUTV -->|"no"| ROWS
+  OUTV -->|"no"| HEAD
   OUTV -->|"yes"| QOUT{{"stated in words: do most people<br/>typing it mean this market?"}}:::jev
-  QOUT -->|"yes: its own head term"| ROWS
+  QOUT -->|"yes: its own head term"| HEAD
   QOUT -->|"no: drawings, 1.83M a month"| DROPPED
+  HEAD{"among the market's largest searches,<br/>or its most valuable buying ones?"}:::code
+  HEAD -->|"no"| ROWS
+  HEAD -->|"yes"| PAGE["page one<br/>$0.002 a search, eight at a time"]:::money
+  PAGE --> QGROUND{{"judging by what Google shows,<br/>is this search about this market?"}}:::jev
+  QGROUND -->|"yes"| ROWS
+  QGROUND -->|"no: top modelling, civil3d"| DROPPED
   ROWS["rows: volume · click price · bids · 48-month series"]:::code
-  ROWS --> ADDR["add_rows<br/>collapse word-order permutations"]:::code
+  ROWS --> ADDR["add_rows<br/>collapse word-order permutations<br/>and Google's close variants"]:::code
   ADDR --> GRAPH[("keyword graph")]:::code
 
   GRAPH --> MINE["mine n-grams and entity candidates<br/>volume-weighted, seen in 2+ keywords"]:::code
@@ -76,7 +82,13 @@ flowchart TB
   NET --> EIG["expected entropy reduction<br/>per open question"]:::code
 
   CELLS --> GEN["generate every claim the shape permits,<br/>contradictory pairs included, and the contrasts:<br/>the money / growth / open ground is in A, not B.<br/>code checks each premise holds as printed"]:::code
-  GEN --> QADJ{{"fair reading of the measurements?<br/>which of two accounts?<br/>still true with its subject swapped?<br/>guessable from the name alone?<br/>what does it do for the reader?"}}:::jev
+  PAGE --> CLUST["buying searches grouped by<br/>three shared top-ten results"]:::code
+  CLUST --> QKIND{{"what is each result? specialist ·<br/>household name · directory · article ·<br/>forum or social · off-target"}}:::jev
+  QKIND --> SPLIT["clicks split by position;<br/>open value = buyer money × share<br/>on pages not built for it"]:::code
+  LABS["Labs difficulty · share of voice"]:::money --> WIN
+  SPLIT --> WIN["where to win: start here · weak spots ·<br/>lead cost by offering · who owns ·<br/>share of search · switching · patterns · new demand"]:::code
+  GEN --> QADJ{{"fair reading of the measurements?<br/>which of two accounts?<br/>still true with its subject swapped?<br/>guessable from the name alone?<br/>does it change a decision, by a majority?"}}:::jev
+  WIN --> QADJ
   QADJ --> KEPT["survivors"]:::code
   KEPT --> QRANK{{"which would change what they do most?<br/>groups of 8, then the winners"}}:::jev
   QRANK --> FIND["ranked findings"]:::code
@@ -97,7 +109,8 @@ flowchart TB
   VERD --> DATA
   GEN --> DATA
   GRAPH --> DATA
-  DATA(["data/ — keywords · offerings · topics · tested ·<br/>series · trail · network · forecast · run"]):::io
+  SPLIT --> DATA
+  DATA(["data/ — keywords · offerings · topics · opportunities ·<br/>page one · share of voice · tested · series · trail ·<br/>network · forecast · run"]):::io
 
   classDef money fill:#fdeae1,stroke:#eb6834,stroke-width:1.5px,color:#4a1d0c;
   classDef jev fill:#e4edfb,stroke:#2a78d6,stroke-width:1.5px,color:#10305c;
@@ -120,6 +133,8 @@ stateDiagram-v2
     [*] --> OBSERVE
     OBSERVE: OBSERVE
     OBSERVE: one billable call
+    GROUND: GROUND
+    GROUND: the largest searches, held to page one
     ORIENT: ORIENT
     ORIENT: place every search on three axes
     INFER: INFER
@@ -132,15 +147,19 @@ stateDiagram-v2
     ASSESS: does it bear on the question?
     BACKTRACK: BACKTRACK
     BACKTRACK: undo the rows, kill the question class
+    WHERE: WHERE
+    WHERE: page one for the buying searches, where to win
     PRICE: PRICE
     PRICE: what reaching the buyers costs
     REPORT: REPORT
 
-    OBSERVE --> ORIENT
+    OBSERVE --> GROUND
+    GROUND --> ORIENT
     ORIENT --> INFER
     INFER --> DECIDE
     DECIDE --> ACT: a question that clears the effort floor
-    DECIDE --> PRICE: nothing left worth buying
+    DECIDE --> WHERE: nothing left worth buying
+    WHERE --> PRICE
     ACT --> ASSESS
     ASSESS --> ORIENT: paid off, go deeper
     ASSESS --> BACKTRACK: dead end

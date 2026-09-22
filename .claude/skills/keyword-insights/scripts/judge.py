@@ -482,6 +482,72 @@ def invented_giants(client: jev.Client, graph: K.Graph,
     return drop, Stage("invented", len(giants), result.usage, notes)
 
 
+# The relevance question, asked again with what Google shows for the
+# search. Same criteria, so "in this market" keeps one definition; only the
+# evidence changes. The first page is ranked on what people typing a search
+# click, so it is the best measurement there is of what they meant.
+GROUND_QUESTION = (
+    "Someone typed `search` into Google, and `first_page` is what Google "
+    "showed them — ranked on what the people typing it go on to click. "
+    "Judging by those pages, is `search` about the thing the `market` "
+    "market deals in?")
+
+
+def _page_lines(results: Sequence[dict], limit: int = 10) -> list[str]:
+    """Page one as a reader would skim it: where, what it is called, what
+    it says — trimmed, because the titles carry most of it."""
+    out = []
+    for r in list(results)[:limit]:
+        said = " ".join((r.get("description") or "").split())[:140]
+        out.append(f"{r.get('domain', '')} — {r.get('title', '')}"
+                   + (f" — {said}" if said else ""))
+    return out
+
+
+def ground(client: jev.Client, graph: K.Graph,
+           pages: dict[str, Sequence[dict]], asker: str
+           ) -> tuple[list[str], Stage]:
+    """Which of these searches, read by what Google shows for them, are
+    about something else?
+
+    The relevance question reads a search's words, and words are where
+    every contamination this skill has suffered came in: `drawings` read in
+    the CAD sense at 1.83 million a month, `how to drawings` at 301,000.
+    The guards after it — outvoting, invented giants — compare sizes, and
+    size stopped being enough on `cad to bim`: a harvested `modelling 3d`
+    at 135,000 a month raised the ceiling that `invented_giants` compares
+    against, so a price probe's `top modelling` (8,100, modelling
+    agencies), `modelling jobs` and `what is modelling` passed beneath it
+    and became the report's three leading insights (it-23).
+
+    Every practitioner checks intent the same way: search it and look.
+    One Noul per search, answered against page one, for the searches that
+    carry the market's volume — the head is where contamination does its
+    damage, and where the evidence is worth $0.002 a page.
+    """
+    items = [(q, rows) for q, rows in pages.items() if rows]
+    if not items:
+        return [], Stage("ground", 0, jev.Usage())
+    result = client.ask(_market_state(graph, asker), {
+        f"ground:{i}": jev.Noul(
+            instructions={"search": q, "market": graph.seed,
+                          "first_page": _page_lines(rows),
+                          "question": GROUND_QUESTION},
+            criteria=RELEVANCE_CRITERIA)
+        for i, (q, rows) in enumerate(items)})
+    drop = [q for i, (q, _) in enumerate(items)
+            if not result.noul(f"ground:{i}").yes(YES)]
+    notes = [f"{len(items)} of the largest searches read against their first "
+             f"page; {len(drop)} about something else"]
+    if drop:
+        vol = {k.term: k.volume for k in graph.keywords.values()}
+        big = max(drop, key=lambda t: (vol.get(t, 0), t))
+        notes.append(f"dropped {sum(vol.get(t, 0) for t in drop):,} searches "
+                     f"a month, led by “{big}” "
+                     f"({vol.get(big, 0):,} a month)")
+    return drop, Stage("ground", len(items), result.usage, notes)
+
+
 # --------------------------------------------------------------------------
 # Orient, part 2: what is each searcher doing?
 # --------------------------------------------------------------------------
@@ -676,16 +742,111 @@ class Claim:
     obvious: float = 1.0
     stakes: float = 0.0
     stakes_label: str = ""
+    decides: float = 0.0       # P(it tells them which path, or reverses one)
     surprising: float = 0.0
     account: str = ""
     account_p: float = 0.0
     inert: bool = False
+    background: bool = False   # true, but it only fills in the picture
     weight: float = 0.0        # Jev's own share of "which matters most"
     verdict: str = "pending"
     decoy: str = ""
 
     def survived(self) -> bool:
         return self.verdict == "kept"
+
+
+# Claims shaped as a decision rather than a description: "start with X",
+# "a lead costs $Y", "part of this market is new". Swapping the subject for
+# an unrelated one tests whether a sentence's *form* would fit anywhere,
+# and for a decision it does by design — the specificity is in this
+# market's own searches, domains and prices, which code checks before the
+# claim is built. The swap test caught platitudes; applied here it would
+# catch every decision. The guessable test still applies.
+DECISION_SHAPED = frozenset({"start_here", "open_door", "customer_cost",
+                             "who_owns",
+                             "who_owns_not", "weak_open", "weak_closed",
+                             "share_of_search", "switching", "pattern",
+                             "new_demand"})
+
+# What can be on page one, by how hard it is to beat. The weak kinds are the
+# weak spots SERP analysts look for: a forum thread, a social post, a press
+# release — pages not built to answer the search.
+PAGE_KINDS = {
+    "specialist": "A business whose own work is exactly this — a focused firm, "
+                  "product or service built for it",
+    "major_brand": "A large, well-known company, platform or marketplace whose "
+                   "name alone wins trust",
+    "list": "A directory, review site, comparison or roundup of other companies",
+    "publication": "An article, guide, encyclopedia entry or news piece that "
+                   "explains rather than sells",
+    "community": "A forum thread, social media post, Q&A answer, video, press "
+                 "release or other page not built to answer this search",
+    "off_target": "A page about something else, here by accident",
+}
+
+
+def read_page_one(client: jev.Client, graph: K.Graph, query: str,
+                  results: Sequence[dict], asker: str) -> Stage:
+    """What each result on page one is — and so how hard it is to beat."""
+    if not results:
+        return Stage("page_one", 0, jev.Usage())
+    questions = {f"page:{i}": jev.Choice(
+        instructions={"search": query, "website": r.get("domain", ""),
+                      "page_title": r.get("title", ""),
+                      "what_it_says": r.get("description", ""),
+                      "question": "Someone searched Google for `search` and "
+                                  "this page is on the first page of results. "
+                                  "What is it?"},
+        criteria=PAGE_KINDS) for i, r in enumerate(results)}
+    result = client.ask(_market_state(graph, asker), questions)
+    for i, r in enumerate(results):
+        r["kind"] = result.choice(f"page:{i}").choice
+    return Stage("page_one", len(questions), result.usage)
+
+
+def pick_start(client: jev.Client, graph: K.Graph, words: dict[str, str],
+               asker: str) -> tuple[str | None, Stage]:
+    """Among genuine trade-offs, which is the better place to start?
+
+    Only asked when no candidate beats every other on every count — code
+    removes the dominated ones first — and each option arrives described by
+    where it stands among the others, in words, because the comparisons are
+    arithmetic and were made before the question was asked.
+    """
+    if not words:
+        return None, Stage("pick_start", 0, jev.Usage())
+    if len(words) == 1:
+        return next(iter(words)), Stage("pick_start", 0, jev.Usage())
+    options = dict(list(words.items())[:GROUP])
+    result = client.ask(_market_state(graph, asker), {"start": jev.Choice(
+        instructions={"reader": asker, "market": graph.seed,
+                      "question": "`reader` can go after only one of these "
+                                  "groups of searches first. Which is the "
+                                  "best place to start?"},
+        criteria=options)})
+    answer = result.choice("start")
+    return answer.choice, Stage("pick_start", 1, result.usage,
+                                [f"chose “{answer.choice}” from "
+                                 f"{len(options)} genuine trade-offs "
+                                 f"(confidence {answer.confidence:.2f})"])
+
+
+def same_kind(client: jev.Client, graph: K.Graph, pattern: str,
+              fillers: Sequence[str], asker: str) -> tuple[bool, Stage]:
+    """Are the words filling a pattern's slot one kind of thing?"""
+    result = client.ask(_market_state(graph, asker), {"kind": jev.Noul(
+        instructions={"pattern": pattern, "fillers": list(fillers)[:20],
+                      "question": "In the search pattern `pattern`, the {x} "
+                                  "is filled by each of `fillers`. Are they "
+                                  "all the same kind of thing, so that each "
+                                  "makes the same kind of search?"},
+        criteria={"true": "Yes — they are interchangeable instances of one "
+                          "kind of thing, such as file formats, app names, "
+                          "materials or places",
+                  "false": "No — they are different kinds of things, so these "
+                           "searches are not one repeatable pattern"})})
+    return result.noul("kind").yes(YES), Stage("same_kind", 1, result.usage)
 
 
 def _swap(text: str, topic: str, decoy: str) -> str:
@@ -743,17 +904,19 @@ def adjudicate(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
                            "these two",
             })
 
-        questions[f"swap:{i}"] = jev.Noul(
-            instructions={"statement": _swap(claim.assertion, claim.topic,
-                                             claim.decoy),
-                          "question": "Could `statement` be a fair "
-                                      "description of its subject?"},
-            criteria={
-                "true": "Yes — this reads as a plausible thing to say about "
-                        "that subject",
-                "false": "No — this makes a specific claim that would have to "
-                         "be checked, and would probably be wrong",
-            })
+        if claim.kind not in DECISION_SHAPED:
+            questions[f"swap:{i}"] = jev.Noul(
+                instructions={"statement": _swap(claim.assertion, claim.topic,
+                                                 claim.decoy),
+                              "question": "Could `statement` be a fair "
+                                          "description of its subject?"},
+                criteria={
+                    "true": "Yes — this reads as a plausible thing to say "
+                            "about that subject",
+                    "false": "No — this makes a specific claim that would "
+                             "have to be checked, and would probably be "
+                             "wrong",
+                })
 
         questions[f"obvious:{i}"] = jev.Noul(
             instructions={"statement": claim.assertion,
@@ -810,15 +973,32 @@ def adjudicate(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
         claim.account = account.choice
         claim.account_p = account.probabilities.get("statement", 0.0)
         claim.forbids_p = claim.account_p
-        claim.swappable = result.noul(f"swap:{i}").noul
+        claim.swappable = (0.0 if claim.kind in DECISION_SHAPED
+                           else result.noul(f"swap:{i}").noul)
         claim.obvious = result.noul(f"obvious:{i}").noul
         claim.surprising = result.noul(f"odd:{i}").noul
         score = result.score(f"stakes:{i}")
-        claim.stakes, claim.stakes_label = score.normalized, score.label
-        # "Most likely level is Nothing" is the model's own best guess, not
-        # a cut-off chosen by the author.
-        claim.inert = max(score.probabilities,
-                          key=score.probabilities.get) == "0"
+        claim.stakes = score.normalized
+        # The value floor, won by a majority like the account test. The two
+        # upper levels change what the reader does — pick a path, or drop
+        # the plan they came with; the two lower ones do not. A finding is
+        # kept only if the model puts more than half its weight on a
+        # decision. The first floor asked which single level was likeliest,
+        # while the report printed the level nearest the mean, and on these
+        # spread-out answers the two disagree about a third of the time
+        # ({0: .32, 1: .20, 2: .36, 3: .12} is "a choice" by the first and
+        # "colour" by the second): the `cad to bim` report showed five
+        # findings labelled Colour, including its first three (it-23).
+        p = score.probabilities
+        claim.decides = p.get("2", 0.0) + p.get("3", 0.0)
+        claim.inert = (claim.decides < YES
+                       and p.get("0", 0.0) >= p.get("1", 0.0))
+        claim.background = claim.decides < YES and not claim.inert
+        # The label is the likelier level on the side the floor chose, so
+        # what the reader sees and what decided the verdict are one reading.
+        side = ("3", "2") if claim.decides >= YES else ("1", "0")
+        claim.stakes_label = score.legend.get(
+            max(side, key=lambda k: (p.get(k, 0.0), k)), score.label)
 
         # The account test is won by a majority, not a plurality. Three
         # options means the top pick can hold 0.42 while the other two
@@ -839,6 +1019,8 @@ def adjudicate(client: jev.Client, graph: K.Graph, claims: Sequence[Claim],
             claim.verdict = "knowable without data"
         elif claim.inert:
             claim.verdict = "changes nothing"
+        elif claim.background:
+            claim.verdict = "background"
         else:
             claim.verdict = "kept"
 

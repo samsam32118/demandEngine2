@@ -85,6 +85,15 @@ which topics break the pattern.
 | `season` | peak month over mean, per topic | is there a season, and where is it sharpest? |
 | `substitute` | keywords naming two topics at once | what is weighed against what? |
 | `gradient` | the qualifier that raises the click price most, over searches that are narrower than their bare term — searched less than it | does narrowing a search reach a different, dearer searcher? |
+| `start_here` | page-one groups of buying searches that no other group beats on buyer money naming no company, difficulty and first-page weakness at once; Jev picks among them | where should a newcomer start? |
+| `open_door` | the group with the most buyer money naming no company times the share of its page-one clicks on forum, social and off-target pages | where is the first page least defended? |
+| `weak_open` / `weak_closed` | where buyers' page-one clicks go, by kind of page, weighted by position and by each group's money | are buyers answered by pages built for them, or not? A mirror pair, so the account test decides |
+| `customer_cost` | average buyer click by offering, over Grow and Convert's 4.78% lead rate | what does a customer cost through search, and for which kind of offer? |
+| `who_owns` / `who_owns_not` | Labs share of voice over the buying searches, `www.` merged, sites that sell nothing set apart | does one business take the buyers' clicks? |
+| `share_of_search` | each confirmed brand's share of branded searching, median months a year apart | who is gaining on whom? |
+| `switching` | searches naming a brand with "alternative", "vs", "competitors" | who are people trying to leave? |
+| `pattern` | one-slot skeletons with three or more distinct fillers, the slot checked by Jev | which one page template answers many searches? |
+| `new_demand` | searches with no month above 10 three years ago, now at least the market's median size | what did not exist a few years ago? |
 
 ## Four years of history, for the price of one
 
@@ -111,16 +120,47 @@ that repeats).
 twelve, because a hardcoded length silently matches nothing when the
 history grows and the claims quietly stop being generated.
 
-## One thing this data still cannot tell you
+## Close variants are one search
 
-**Whether two near-identical phrases are really two things.** Google reports
-a *combined* volume for terms it considers near-duplicates, so `insulated
-garden rooms` and `insulated garden office` come back with identical volume,
-identical click price and identical bid ranges. They are one measurement
-under two names, and telling them apart would need them submitted in
-separate requests. Word-order permutations (`garden rooms` / `rooms garden`)
-are collapsed on the way in; this second layer is not detectable from a
-single response and is left as it arrives.
+Google Keyword Planner gives every close variant of a search — plural,
+misspelling, a word more or less — the whole cluster's numbers: `bim
+service` and `bim services` come back with the same volume and the same
+48-month series. Counted twice, they double a market: before this was
+handled, 54–56% of the `project management software` corpus, 41–51% of
+`sourdough starter`, 40–43% of `keyword research tool` and 20% of `cad to
+bim` was the same searching counted again (it-23).
+
+`add_rows` now treats a varying 24-month series matching exactly, with the
+same volume, as Google's own fingerprint of a cluster — no coincidence
+produces it across two years, while a flat series ("10 every month")
+matches by chance and identifies nothing. A newcomer with the same
+fingerprint whose words differ from a kept search's by at most one (crude
+stems, so `services` meets `service`) is kept only as an alias of it, in
+`keywords.csv`'s `also_spelled`. Word-order permutations (`garden rooms` /
+`rooms garden`) are collapsed the same way, as before.
+
+## Page one
+
+Two things are read off Google's first page, both from DataForSEO's SERP
+API at $0.002 a page, typed — organic results with their domains, the ads,
+AI overviews, question boxes, forums and video.
+
+**Whether a search is in the market at all.** The relevance question reads
+words, and every contamination this skill has suffered came in through
+words. So the market's largest searches, and its most valuable buying
+searches, are asked it again with page one in front of Jev. See
+`judge.ground`.
+
+**Where someone could win.** Buying searches are grouped by page one: a
+search joins the first group, most valuable first, whose own page shares
+three of its top-ten URLs, or starts one. Each group's first page is read
+by Jev, result by result — specialist, household name, directory, article,
+forum or social page, off-target — and its clicks are split by position
+using First Page Sage's 2026 CTR curve as relative weights. A group's
+**open value** is its buyer money in searches naming no company, times the
+share of those clicks sitting on pages not built to answer it (forum,
+social, off-target). See `opportunity.py`, and **Where to win** in
+`SKILL.md` for the families.
 
 ## Follow-ups
 

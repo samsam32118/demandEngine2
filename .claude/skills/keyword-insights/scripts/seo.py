@@ -86,6 +86,15 @@ ENDPOINTS = {
     #
     # Pay per row when the size is bounded; pay flat when it is not.
     "price_labs": "dataforseo_labs/google/keyword_overview/live",
+    # Who is on page one, and in what form: organic results with their
+    # domains, the ads, and the features Google put above them. $0.002 a
+    # page. This replaced a Bright Data scrape of Google's rendered page,
+    # which broke the rule that this skill runs on Jev and DataForSEO alone
+    # and had to be parsed back out of markdown.
+    "serp": "serp/google/organic/live/advanced",
+    # Which domains take the traffic across a set of searches: share of
+    # voice, one call for up to 200 searches.
+    "share_of_voice": "dataforseo_labs/google/serp_competitors/live",
 }
 
 # Exact match, because it is the only honest default. Broad match forecasts
@@ -298,8 +307,89 @@ def normalise_labs(result: list[dict] | None, source: str) -> list[dict]:
                 "trend": trend,
                 "months": months,
                 "source": source,
+                **competition_fields(item),
             })
     return rows
+
+
+def competition_fields(item: dict) -> dict:
+    """What Labs knows about how hard a search is to win.
+
+    It was in every keyword_overview response the skill paid for, and the
+    parser kept only volume and price. Difficulty, the parent topic and the
+    strength of the pages already ranking are the dimension every serious
+    keyword framework starts from — Ahrefs ranks by it, Grow and Convert
+    and every niche-site builder check it before anything else.
+    """
+    props = item.get("keyword_properties") or {}
+    links = item.get("avg_backlinks_info") or {}
+    intent = item.get("search_intent_info") or {}
+    kd = props.get("keyword_difficulty")
+    return {
+        "difficulty": None if kd is None else int(kd),
+        "parent_topic": (props.get("core_keyword") or "").strip().lower(),
+        "labs_intent": intent.get("main_intent") or "",
+        "top10_domain_rank": links.get("main_domain_rank"),
+        "top10_referring_domains": links.get("referring_domains"),
+    }
+
+
+def normalise_competition(result: list[dict] | None) -> list[dict]:
+    rows = []
+    for block in result or []:
+        for item in (block.get("items") or []):
+            term = (item.get("keyword") or "").strip().lower()
+            if term:
+                rows.append({"term": term, **competition_fields(item)})
+    return rows
+
+
+def normalise_serp(result: list[dict] | None) -> list[dict]:
+    """Page one, in order: every item's type, and for results a domain."""
+    rows = []
+    for block in result or []:
+        for item in (block.get("items") or []):
+            rows.append({
+                "type": item.get("type") or "",
+                "rank": item.get("rank_group") or 0,
+                "position": item.get("rank_absolute") or 0,
+                "domain": (item.get("domain") or "").lower(),
+                "url": item.get("url") or "",
+                "title": item.get("title") or "",
+                "description": item.get("description") or "",
+            })
+    return rows
+
+
+def normalise_share(result: list[dict] | None) -> list[dict]:
+    rows = []
+    for block in result or []:
+        for item in (block.get("items") or []):
+            rows.append({
+                "domain": (item.get("domain") or "").lower(),
+                "etv": float(item.get("etv") or 0.0),
+                "visibility": float(item.get("visibility") or 0.0),
+                "keywords": int(item.get("keywords_count") or 0),
+                "avg_position": float(item.get("avg_position") or 0.0),
+            })
+    return rows
+
+
+def _worst_case(action: str, endpoint: str, task: dict) -> float:
+    """The most one call can bill, from its own price list.
+
+    Google Ads endpoints are flat ($0.09, $0.10 held); Labs keyword
+    overview is $0.012 plus $0.00012 a keyword, measured to the cent on a
+    670-keyword call; a SERP page is $0.002; share of voice is one Labs
+    task, billed $0.014 for twenty domains.
+    """
+    if action == "serp":
+        return 0.0025
+    if action == "share_of_voice":
+        return 0.03
+    if endpoint == ENDPOINTS["price_labs"]:
+        return 0.012 + 0.00012 * len(task.get("keywords") or ()) + 0.001
+    return 0.10
 
 
 def normalise(result: list[dict] | None, source: str) -> list[dict]:
@@ -457,6 +547,12 @@ class Seo:
         cached = self._cached(key)
         if action == "forecast":
             shape = normalise_forecast
+        elif action == "competition":
+            shape = normalise_competition
+        elif action == "serp":
+            shape = normalise_serp
+        elif action == "share_of_voice":
+            shape = normalise_share
         elif endpoint == ENDPOINTS["price_labs"]:
             shape = lambda r: normalise_labs(r, source)
         else:
@@ -474,8 +570,11 @@ class Seo:
                 f"offline: no cached response for {action} "
                 f"({json.dumps(task, sort_keys=True)[:160]})")
 
-        # The ceiling is checked before the money moves, not after.
-        worst_case = 0.10
+        # The ceiling is checked before the money moves, not after — against
+        # what this call can cost, not the dearest call there is. A flat
+        # $0.10 reserve refused $0.002 pages once a run was within a dime
+        # of its ceiling, which is exactly when a page one is worth reading.
+        worst_case = _worst_case(action, endpoint, task)
         if self.ledger.spent_usd + worst_case > self.max_spend_usd:
             raise BudgetExceeded(
                 f"would exceed --max-spend ${self.max_spend_usd:.2f} "
@@ -596,6 +695,31 @@ class Seo:
                          note=f"at ${whole} {match} match")
 
     # -- planning --------------------------------------------------------
+
+    def serp(self, query: str, depth: int = 10) -> Call:
+        """Page one for one search: results, ads and features, in order."""
+        task = self._geo({"keyword": query.strip().lower(), "depth": depth},
+                         history=False)
+        return self._run("serp", ENDPOINTS["serp"], task, "serp",
+                         note=f"page one for {query!r}")
+
+    def competition(self, keywords: Sequence[str]) -> Call:
+        """How hard each search is to win, from Labs, priced per row."""
+        kws = _clean(keywords)[:MAX_PRICED]
+        if not kws:
+            raise SeoError("competition needs at least one keyword")
+        task = self._geo({"keywords": kws}, history=False)
+        return self._run("competition", ENDPOINTS["price_labs"], task,
+                         "competition")
+
+    def share_of_voice(self, keywords: Sequence[str], limit: int = 20) -> Call:
+        """Which domains take the traffic across these searches."""
+        kws = _clean(keywords)[:200]
+        if not kws:
+            raise SeoError("share of voice needs at least one keyword")
+        task = self._geo({"keywords": kws, "limit": limit}, history=False)
+        return self._run("share_of_voice", ENDPOINTS["share_of_voice"], task,
+                         "share_of_voice")
 
     def is_cached(self, action: str, task_seed: dict) -> bool:
         endpoint = ENDPOINTS[action]

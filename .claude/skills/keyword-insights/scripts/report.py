@@ -29,6 +29,7 @@ import insights
 import judge
 import market_net as MN
 import kgraph as K
+import opportunity as O
 
 n, usd, pct, money0 = insights.n, insights.usd, insights.pct, insights.money0
 
@@ -44,6 +45,8 @@ REJECTION_GLOSS = {
                             "unrelated one, so it was never about this market",
     "knowable without data": "it follows from the market's name alone",
     "changes nothing": "true, specific, and of no consequence to the reader",
+    "background": "true and specific, but more likely to fill in the picture "
+                  "than to change a decision",
     "below threshold": "a measured value did not clear the control arm's "
                        "cut-off",
 }
@@ -83,7 +86,8 @@ def data_dir_for(report_path: str) -> str:
 # --------------------------------------------------------------------------
 
 def render(graph: K.Graph, claims: Sequence[judge.Claim], trail: Sequence,
-           manifest: dict, data_dir: str = "data") -> str:
+           manifest: dict, data_dir: str = "data",
+           extra: dict | None = None) -> str:
     arm = manifest.get("arm", "jev")
     kept = insights.order(claims)
     today = _dt.date.today().isoformat()
@@ -134,7 +138,7 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim], trail: Sequence,
                      "found to support any statement at all.")
         L.append("")
 
-    L += _footer(graph, claims, manifest, folder)
+    L += _footer(graph, claims, manifest, folder, extra or {})
     return "\n".join(L).rstrip() + "\n"
 
 
@@ -178,6 +182,7 @@ def _insight(i: int, claim: judge.Claim, arm: str) -> list[str]:
               f"{growing['year_on_year']:.2f}x |",
               f"| {falling['topic']} | {n(falling['searches'])} | "
               f"{falling['year_on_year']:.2f}x |", ""]
+    L += _opportunity_table(claim)
     details = []
     for key, label in DETAIL_KEYS.items():
         value = claim.evidence.get(key)
@@ -188,8 +193,73 @@ def _insight(i: int, claim: judge.Claim, arm: str) -> list[str]:
     if claim.examples:
         L += ["Behind it: " + " · ".join(f"`{e}`" for e in claim.examples[:4]),
               ""]
+    why = O.frame(claim.kind)
+    if why:
+        L += [f"*Why it matters — {why}*", ""]
     L += [_scores(claim, arm), ""]
     return L
+
+
+# What each kind of opportunity finding shows beneath its sentence: the
+# rows the sentence was chosen from, so a reader can see the runners-up and
+# the evidence for the pick without opening a file.
+KIND_NAMES = {"specialist": "specialist firms", "major_brand": "household names",
+              "list": "directories and review sites",
+              "publication": "articles and guides",
+              "community": "forum, social and press pages",
+              "off_target": "off-target pages"}
+
+
+def _opportunity_table(claim: judge.Claim) -> list[str]:
+    ev = claim.evidence
+    if claim.kind in ("start_here", "open_door"):
+        rows = [ev] + list(ev.get("next") or [])
+        out = []
+        if claim.kind == "start_here":
+            out = ["| start with | searches | buyer searches/mo | buyer "
+                   "clicks worth/mo | naming no company | difficulty | "
+                   "page-one clicks to weak pages |",
+                   "|---|---:|---:|---:|---:|---:|---:|"]
+            for r in rows:
+                kd = r.get("difficulty")
+                out.append(f"| {r['start_with']} | {r['searches']} | "
+                           f"{n(r['buyer_searches_a_month'])} | "
+                           f"{money0(r['prize_a_month'])} | "
+                           f"{money0(r['naming_no_company_a_month'])} | "
+                           f"{'—' if kd is None else f'{kd:.0f}'} | "
+                           f"{pct(r['clicks_to_weak_pages'])} |")
+            out.append("")
+        page = ev.get("page_one_detail") or []
+        if page:
+            out.append("Page one for “" + ev["start_with"] + "”: "
+                       + " · ".join(f"{r['rank']}. {r['domain']} "
+                                    f"({KIND_NAMES.get(r['kind'], r['kind'] or '?')})"
+                                    for r in page))
+        return out + [""]
+    if claim.kind in ("weak_open", "weak_closed"):
+        split = ev.get("clicks_by_kind") or {}
+        if not split:
+            return []
+        return (["| what holds page one | share of buyers' page-one clicks |",
+                 "|---|---:|"]
+                + [f"| {KIND_NAMES.get(k, k)} | {pct(v)} |"
+                   for k, v in split.items()] + [""])
+    if claim.kind == "customer_cost" and len(ev.get("by_offering") or []) >= 2:
+        return (["| wants | buying searches/mo | average click | cost of a "
+                 "lead |", "|---|---:|---:|---:|"]
+                + [f"| {K.OFFERING_NOUNS.get(r['offering'], r['offering'])} | "
+                   f"{n(r['buyer_searches_a_month'])} | "
+                   f"{usd(r['average_click'])} | "
+                   f"{money0(r['cost_per_lead'])} |"
+                   for r in ev["by_offering"]] + [""])
+    if claim.kind in ("who_owns", "who_owns_not"):
+        firms = ev.get("businesses") or []
+        if not firms:
+            return []
+        return (["| business | share of buyer clicks |", "|---|---:|"]
+                + [f"| {f['domain']} | {pct(f['share'])} |" for f in firms[:6]]
+                + [""])
+    return []
 
 
 def _offering_table(rows: Sequence[dict],
@@ -215,7 +285,8 @@ def _offering_table(rows: Sequence[dict],
 def _scores(claim: judge.Claim, arm: str) -> str:
     if arm == "code":
         return "<sub>Kept by the threshold arm.</sub>"
-    return (f"<sub>Worth to the reader: {claim.stakes_label or '—'} · "
+    return (f"<sub>Worth to the reader: {claim.stakes_label or '—'} "
+            f"({pct(claim.decides)} likely to change a decision) · "
             f"value weight {claim.weight:.2f} · holds up: fair "
             f"reading {claim.reads_true:.2f}, beats its rival "
             f"{claim.account_p:.2f}, specific to this market "
@@ -224,7 +295,7 @@ def _scores(claim: judge.Claim, arm: str) -> str:
 
 
 def _footer(graph: K.Graph, claims: Sequence[judge.Claim], manifest: dict,
-            folder: str) -> list[str]:
+            folder: str, extra: dict) -> list[str]:
     rows = graph.topic_rows()
     erratic = [r["topic"] for r in rows
                if r.get("growth") is not None and not r.get("growth_readable")]
@@ -245,6 +316,15 @@ def _footer(graph: K.Graph, claims: Sequence[judge.Claim], manifest: dict,
          series_rows),
         ("trail.csv", "every question the loop chased — what it bought, what "
          "came back", len(manifest.get("trail") or [])),
+        ("opportunities.csv", "each group of buying searches one page could "
+         "answer — what it is worth, how hard, and what holds its first page",
+         len(extra.get("opportunities") or [])),
+        ("page_one.csv", "every first page read — each result, what kind of "
+         "page it is, and whether the search stayed in the market",
+         sum(len(_organic(rows)) for rows in
+             (extra.get("pages") or {}).values())),
+        ("share_of_voice.csv", "which sites take the clicks the buying "
+         "searches send", len(extra.get("shares") or [])),
         ("network.json", "the market network: what it believed before "
          "measuring, after, and what moved it", None),
         ("forecast.json", "Google's forecast for the searches worth bidding on",
@@ -291,9 +371,16 @@ def _footer(graph: K.Graph, claims: Sequence[judge.Claim], manifest: dict,
 # The data
 # --------------------------------------------------------------------------
 
+def _organic(rows) -> list[dict]:
+    import serp as S
+    return S.organic_rows(rows or [])
+
+
 def write_data(folder: str, graph: K.Graph, claims: Sequence[judge.Claim],
-               trail: Sequence, manifest: dict) -> list[str]:
+               trail: Sequence, manifest: dict,
+               extra: dict | None = None) -> list[str]:
     """Everything underneath the insights, as files anyone can open."""
+    extra = extra or {}
     os.makedirs(folder, exist_ok=True)
     written = []
 
@@ -314,16 +401,17 @@ def write_data(folder: str, graph: K.Graph, claims: Sequence[judge.Claim],
     keywords = sorted(graph.keywords.values(), key=lambda k: (-k.volume, k.term))
     table("keywords.csv",
           ["term", "searches_a_month", "click_price", "low_bid", "high_bid",
-           "competition", "about", "wants", "wants_readable", "answer",
-           "answer_readable", "companies", "source", "year_on_year",
-           "year_on_year_readable"],
+           "competition", "difficulty", "about", "wants", "wants_readable",
+           "answer", "answer_readable", "companies", "source", "year_on_year",
+           "year_on_year_readable", "also_spelled"],
           [[k.term, k.volume, round(k.cpc, 2), round(k.low_bid, 2),
             round(k.high_bid, 2),
             "" if k.competition_index is None else k.competition_index,
+            "" if k.difficulty is None else k.difficulty,
             k.topic or "", k.job or "", k.job_certain, k.offering or "",
             k.offering_certain, ";".join(k.entities),
             k.source, _round(K.growth(k.trend), 3),
-            K.growth_readable(k.trend)]
+            K.growth_readable(k.trend), ";".join(k.aliases)]
            for k in keywords])
 
     table("series.csv", ["term", "month", "searches"],
@@ -375,6 +463,44 @@ def write_data(folder: str, graph: K.Graph, claims: Sequence[judge.Claim],
           [[i, t.question, t.action, t.status, t.depth, len(t.payload),
             t.gain_label, t.note, t.origin]
            for i, t in enumerate(trail, 1)])
+
+    groups = list(extra.get("opportunities") or [])
+    table("opportunities.csv",
+          ["rank", "start_with", "topic", "offering", "searches",
+           "also_on_this_page", "buyer_searches_a_month",
+           "buyer_clicks_worth_a_month", "click_price", "difficulty",
+           "year_on_year", "worth_naming_no_company_a_month",
+           "page_one_clicks_to_weak_pages", "open_value_a_month",
+           "page_one_clicks_by_kind", "page_one", "ads", "ai_overview"],
+          [[i, r["start_with"], r["topic"], r["offering"], r["searches"],
+            r["also"], r["buyer_searches_a_month"], r["prize_a_month"],
+            r["click_price"], r["difficulty"], r["year_on_year"],
+            r["naming_no_company_a_month"], r["clicks_to_weak_pages"],
+            r["open_value_a_month"],
+            json.dumps(r["clicks_by_kind"]), r["page_one"], r["ads"],
+            r["ai_overview"]]
+           for i, r in enumerate((c.row() for c in groups), 1)])
+
+    kinds = {(c.anchor.term, r["rank"]): r.get("kind", "")
+             for c in groups for r in c.page}
+    pages = extra.get("pages") or {}
+    table("page_one.csv",
+          ["search", "still_in_market", "rank", "domain", "kind", "title",
+           "url"],
+          [[term, term in graph.keywords, r["rank"], r["domain"],
+            kinds.get((term, r["rank"]), ""), r["title"], r["url"]]
+           for term in sorted(pages) for r in _organic(pages[term])])
+
+    import serp as S
+    shares = list(extra.get("shares") or [])
+    total = sum(x.get("etv", 0.0) for x in shares) or 1.0
+    table("share_of_voice.csv",
+          ["domain", "share_of_buyer_clicks", "estimated_clicks_a_month",
+           "visibility", "searches_ranked_for", "average_position"],
+          [[S._registrable(x["domain"]), round(x["etv"] / total, 4),
+            round(x["etv"], 1), round(x.get("visibility", 0.0), 4),
+            x.get("keywords"), round(x.get("avg_position", 0.0), 1)]
+           for x in sorted(shares, key=lambda x: -x.get("etv", 0.0))])
 
     verdict = manifest.get("verdict") or {}
     prior = manifest.get("prior") or {}

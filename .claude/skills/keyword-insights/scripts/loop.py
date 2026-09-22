@@ -29,6 +29,7 @@ import json
 import os
 import sys
 import time
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -41,12 +42,12 @@ import market_net as MN
 import report as report_mod
 import seo
 import serp as S
+import opportunity as O
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SKILL = os.path.dirname(HERE)
 SEO_CACHE = os.path.join(SKILL, ".cache", "dataforseo")
 JEV_CACHE = os.path.join(SKILL, ".cache", "jev")
-SERP_CACHE = os.path.join(SKILL, ".cache", "serp")
 
 # Three probes is the smallest run that can do the thing this loop is for:
 # one to see the market, one to chase what looked odd, and one to go
@@ -71,6 +72,16 @@ DEFAULT_JUDGE_CAP = 250
 # than this loses its thinnest tail, and the run says so.
 RELEVANCE_CAP = 2500
 
+# A page one takes five to fifteen seconds to come back, and a run at
+# effort 5 reads up to a hundred and ten: nearly a quarter of an hour one at
+# a time. Eight at once, each still through the run's own client, cache and
+# ledger. The budget is checked for the whole batch before any is sent.
+PAGE_WORKERS = 8
+PAGE_COST = 0.0025
+
+# How many pages the head may take in a run, as a multiple of its size.
+GROUND_READS = 4
+
 # --------------------------------------------------------------------------
 # Effort
 #
@@ -89,21 +100,31 @@ RELEVANCE_CAP = 2500
 # more, because it is the caller's choice and it is stated in units they
 # can argue with — hundredths of a yes/no answer.
 #
+# Two page-one knobs, both at $0.002 a page. `ground` is how many of the
+# market's largest searches are held to what Google shows for them; `pages`
+# is how many of its buying searches are read for where someone could win.
+# The ceilings rose with them: at effort 5 the pages are at most $0.52.
+#
 # Effort is a **ceiling, not a target**. The loop already stops when nothing
 # on the table clears the floor, so effort 5 does not mean eight probes; it
 # means up to eight, and the measured hit rates decide. A market with
 # nothing in it costs the same at every setting.
 EFFORT = {
     1: {"name": "glance", "sites": 1, "iterations": 1, "judge_cap": 150,
-        "max_claims": 60, "bits": 0.05, "max_spend": 0.30},
+        "max_claims": 60, "bits": 0.05, "max_spend": 0.40,
+        "competition": 150, "ground": 10, "pages": 10},
     2: {"name": "quick", "sites": 1, "iterations": 2, "judge_cap": 200,
-        "max_claims": 80, "bits": 0.02, "max_spend": 0.45},
+        "max_claims": 80, "bits": 0.02, "max_spend": 0.60,
+        "competition": 250, "ground": 15, "pages": 20},
     3: {"name": "normal", "sites": 2, "iterations": 3, "judge_cap": 250,
-        "max_claims": 90, "bits": 0.01, "max_spend": 0.70},
+        "max_claims": 90, "bits": 0.01, "max_spend": 0.90,
+        "competition": 400, "ground": 25, "pages": 30},
     4: {"name": "deep", "sites": 3, "iterations": 5, "judge_cap": 400,
-        "max_claims": 120, "bits": 0.005, "max_spend": 1.10},
+        "max_claims": 120, "bits": 0.005, "max_spend": 1.40,
+        "competition": 550, "ground": 40, "pages": 45},
     5: {"name": "exhaustive", "sites": 4, "iterations": 8, "judge_cap": 600,
-        "max_claims": 160, "bits": 0.002, "max_spend": 1.80},
+        "max_claims": 160, "bits": 0.002, "max_spend": 2.20,
+        "competition": 700, "ground": 50, "pages": 60},
 }
 EFFORT_NAMES = {v["name"]: k for k, v in EFFORT.items()}
 DEFAULT_EFFORT = 3
@@ -144,7 +165,14 @@ class Run:
         self.reserve = reserve
         self.client = jev.Client(cache_dir=JEV_CACHE,
                                  use_cache=not args.no_jev_cache)
-        self.serp = S.Serp(cache_dir=SERP_CACHE, offline=args.offline)
+        self.serp = S.Serp(self.seo)
+        # Every page one read this run, by search, as DataForSEO typed it.
+        self.pages: dict[str, list[dict]] = {}
+        self.unreadable: set[str] = set()
+        self.grounded: set[str] = set()
+        self.ground_reads = 0
+        self.opportunities: list = []
+        self.share_of_voice: list = []
         self.stages: list[judge.Stage] = []
         self.trail: list[insights.Thread] = []
         self.open: list[insights.Thread] = []
@@ -301,6 +329,104 @@ class Run:
         gone += invented + outvoted
         if gone:
             self.graph.drop(gone)
+        # And last, the only check that does not read words or compare
+        # sizes: what Google shows for the searches that carry the market.
+        return gone + self.ground()
+
+    # -- page one --------------------------------------------------------
+
+    def prefetch(self, terms: list[str]) -> None:
+        """Buy page one for several searches at once, in the order given."""
+        todo = [t for t in dict.fromkeys(terms)
+                if t not in self.pages and t not in self.unreadable]
+        room = int((self.seo.max_spend_usd - self.seo.ledger.spent_usd)
+                   / PAGE_COST)
+        todo = todo[:max(room, 0)]
+        if len(todo) < 2:
+            return
+
+        def fetch(term: str):
+            try:
+                return self.serp.page(term), None
+            except S.SerpError as exc:
+                return None, exc
+        with ThreadPoolExecutor(max_workers=PAGE_WORKERS) as pool:
+            for term, (rows, exc) in zip(todo, pool.map(fetch, todo)):
+                if rows is not None:
+                    self.pages[term] = rows
+                    continue
+                self.unreadable.add(term)
+                if len(self.unreadable) == 1:
+                    self.say(f"      · page one not read: {exc}")
+
+    def read_page(self, term: str) -> list[dict] | None:
+        """Page one for a search, once per run; None if it cannot be had."""
+        if term in self.pages:
+            return self.pages[term]
+        if term in self.unreadable:
+            return None
+        try:
+            rows = self.serp.page(term)
+        except S.SerpError as exc:
+            self.unreadable.add(term)
+            if len(self.unreadable) == 1:
+                self.say(f"      · page one not read: {exc}")
+            return None
+        self.pages[term] = rows
+        return rows
+
+    def ground(self, terms: list[str] | None = None) -> list[str]:
+        """Hold the market's largest searches to what Google shows for them.
+
+        The N largest searches are each read against their first page, and
+        whatever is about something else leaves. Dropping one lets the next
+        largest into the head, so it repeats until the head is all read.
+        Every harvest and probe brings its own newcomers to the head, so the
+        run may read four times N pages in all: at twice N, `cad to bim`
+        spent the whole allowance on its four harvests, and the probes after
+        them went unread (it-23). Given `terms`, those are read instead:
+        pages already bought for another reason cost nothing to check.
+        """
+        n = EFFORT[self.args.effort]["ground"]
+        if self.args.no_ground or n <= 0:
+            return []
+        cap = GROUND_READS * n
+        gone: list[str] = []
+        while True:
+            if terms is None:
+                if self.ground_reads >= cap:
+                    break
+                head = sorted((k for k in self.graph.keywords.values()
+                               if k.volume > 0),
+                              key=lambda k: (-k.volume, k.term))[:n]
+                todo = [k.term for k in head if k.term not in self.grounded
+                        and k.term not in self.unreadable]
+                todo = todo[:cap - self.ground_reads]
+            else:
+                todo = [t for t in terms if t in self.graph.keywords
+                        and t not in self.grounded and t in self.pages]
+            if not todo:
+                break
+            self.prefetch(todo)
+            pages = {}
+            for term in todo:
+                rows = self.read_page(term)
+                if rows is None:
+                    continue
+                self.grounded.add(term)
+                pages[term] = S.organic_rows(rows)
+            if terms is None:
+                self.ground_reads += len(todo)
+            if not pages:
+                break
+            drop, st = judge.ground(self.client, self.graph, pages,
+                                    self.args.asker)
+            self.stage(st)
+            if drop:
+                self.graph.drop(drop)
+                gone += drop
+            if terms is not None or not drop:
+                break
         return gone
 
     def harvest(self, query: str) -> int:
@@ -663,9 +789,18 @@ class Run:
         # loop stopped without buying anything, re-running the whole orient
         # would re-ask questions already answered — the cache makes that
         # cheap but not free, and free is available.
-        if len(self.graph.keywords) != self.oriented_at:
+        changed = len(self.graph.keywords) != self.oriented_at
+        if changed:
             self.orient(a.iterations)
+        # The buying searches' first pages are read before the last reading
+        # of the market, so nothing below rests on a search Google shows to
+        # be about something else.
+        dropped = self.read_buying_pages()
+        if dropped:
+            self.infer()
+        if dropped or changed:
             kept = self.find_claims()
+        self.find_opportunities()
         if not self.args.no_forecast:
             # Release the reserve now that the probes have had their turn.
             self.seo.max_spend_usd += self.reserve
@@ -673,6 +808,159 @@ class Run:
         kept = [c for c in self.claims if c.survived()]
         self.say(f"\n{len(kept)} finding(s) survived · "
                  f"{self.seo.ledger.line()} · {self.jev_usage.line()}")
+
+    # -- where someone could win -------------------------------------------
+
+    def read_buying_pages(self) -> list[str]:
+        """Page one for the buying searches worth most, bought once and
+        used twice: each is held to the same test as the market's head —
+        is this search, as Google reads it, about this market? — before any
+        finding rests on it, and then read for where someone could win.
+
+        The buying core is small next to the head, so the grounding by size
+        never reaches most of it, and it is where the report's money is:
+        `top modelling` read as `compare` and sat in the buying core of
+        `cad to bim`, pulling its average buyer click down to $8.33.
+        """
+        level = EFFORT[self.args.effort]
+        core = sorted(O.buying_core(self.graph),
+                      key=lambda k: (-k.money, k.term))[:level["pages"]]
+        self.prefetch([k.term for k in core])
+        got = [k.term for k in core if self.read_page(k.term) is not None]
+        if not got:
+            return []
+        self.say(f"  PAGE ONE read for the {len(got)} buying searches worth "
+                 f"most")
+        return self.ground(got)
+
+    def find_opportunities(self) -> None:
+        """The practitioners' questions, asked of the market the loop built.
+
+        How hard is each buying search to win (Labs difficulty); which of
+        them one page could answer (SERP clustering: three shared results
+        in the top ten); what holds each group's first page (each result
+        read by Jev) and so how much of the buyer money behind it sits on
+        pages not built for it; who takes the clicks (share of voice); who
+        is being left (switching searches, bought for the brands found);
+        and then the opportunity-shaped findings, tested and ranked like
+        every other.
+        """
+        a, level = self.args, EFFORT[self.args.effort]
+        self.say("  WHERE    where someone could win")
+        g = self.graph
+
+        # How hard: the buying core first, then the largest searches.
+        core = sorted(O.buying_core(g), key=lambda k: (-k.money, k.term))
+        biggest = sorted(g.keywords.values(), key=lambda k: -k.volume)
+        ask = list(dict.fromkeys([k.term for k in core]
+                                 + [k.term for k in biggest]))
+        ask = ask[:level["competition"]]
+        if ask:
+            try:
+                call = self.seo.competition(ask)
+                placed = g.set_competition(call.rows)
+                self.say(f"      · difficulty and page-one strength for "
+                         f"{placed:,} searches · ${call.cost_usd:.4f}")
+            except (seo.OfflineMiss, seo.BudgetExceeded, seo.SeoError) as exc:
+                self.say(f"      · difficulty not measured: {exc}")
+
+        # Who is being left: "alternatives to X" for the names found.
+        brands = g.confirmed_entities[:5]
+        if brands and a.effort >= 3:
+            terms = [t for b in brands for t in (
+                f"{b} alternative", f"{b} alternatives",
+                f"alternatives to {b}", f"{b} competitors", f"{b} vs")]
+            before = set(g.keywords)
+            try:
+                call = self.seo.price(terms)
+                g.add_rows(call.rows)
+                fresh = [g.keywords[t] for t in g.keywords if t not in before]
+                gone = set(self.vet(fresh))
+                names = set(g.confirmed_entities)
+                for kw in fresh:
+                    if kw.term not in gone and kw.term in g.keywords:
+                        kw.entities = sorted(n for n in names
+                                             if n in set(K.tokens(kw.term)))
+                self.say(f"      · switching searches for {len(brands)} "
+                         f"name(s): {len(fresh) - len(gone)} found · "
+                         f"${call.cost_usd:.4f}")
+            except (seo.OfflineMiss, seo.BudgetExceeded, seo.SeoError) as exc:
+                self.say(f"      · switching not measured: {exc}")
+
+        # Which buying searches one page could answer, and what holds it.
+        core = [k for k in sorted(O.buying_core(g),
+                                  key=lambda k: (-k.money, k.term))
+                if k.term in self.pages]
+        organic = {k.term: S.organic_rows(self.pages[k.term]) for k in core}
+        features = {k.term: S.features(self.pages[k.term]) for k in core}
+        groups = O.serp_clusters(core, organic, features)
+        for c in groups:
+            self.stage(judge.read_page_one(self.client, g, c.anchor.term,
+                                           c.page, a.asker))
+        self.opportunities = O.by_open_value(groups)
+        if groups:
+            covered = K.share(sum(c.prize for c in groups),
+                              sum(k.money for k in O.buying_core(g)))
+            self.say(f"      · {len(core)} buying searches fall into "
+                     f"{len(groups)} page(s)' worth of work, carrying "
+                     f"{covered:.0%} of the buyer money")
+
+        # Who takes the clicks.
+        shares = []
+        buyers = [k.term for k in sorted(O.buying_core(g),
+                                         key=lambda k: (-k.money, k.term))]
+        if buyers and a.effort >= 2:
+            try:
+                call = self.seo.share_of_voice(buyers[:200])
+                shares = call.rows
+                self.say(f"      · share of voice across "
+                         f"{min(len(buyers), 200)} buying searches · "
+                         f"${call.cost_usd:.4f}")
+            except (seo.OfflineMiss, seo.BudgetExceeded, seo.SeoError) as exc:
+                self.say(f"      · share of voice not measured: {exc}")
+        self.share_of_voice = shares
+
+        # One template, many searches: the broadest patterns, checked.
+        found = []
+        for skeleton, kws, fillers in sorted(
+                O.patterns(g), key=lambda x: (-len(x[2]),
+                                              -sum(k.volume for k in x[1])))[:3]:
+            ok, st = judge.same_kind(self.client, g, skeleton, fillers,
+                                     a.asker)
+            self.stage(st)
+            if ok:
+                found += O.pattern_claim(g, skeleton, kws, fillers)
+                break
+
+        # Where to start: the genuine trade-offs, then Jev's pick.
+        front = O.pareto(O.candidates(groups))
+        chosen = front[0] if len(front) == 1 else None
+        if len(front) > 1:
+            pick, st = judge.pick_start(self.client, g, O.rank_words(front),
+                                        a.asker)
+            self.stage(st)
+            chosen = next((c for c in front if c.anchor.term == pick), None)
+
+        claims = (O.start_here(g, chosen, front)
+                  + O.open_door(g, groups, chosen)
+                  + O.weak_spots(g, groups)
+                  + O.customer_cost(g)
+                  + O.who_owns(g, shares, O.domain_kinds(groups))
+                  + O.share_of_search(g) + O.switching(g) + found
+                  + O.new_demand(g))
+        if not claims:
+            return
+        if a.arm == "code":
+            insights.select_by_code(g, claims)
+        else:
+            self.stage(judge.adjudicate(self.client, g, claims, a.asker))
+        kinds = {c.kind for c in claims}
+        self.claims = [c for c in self.claims if c.kind not in kinds] + claims
+        if a.arm != "code":
+            self.stage(judge.rank(self.client, g, self.claims, a.asker))
+        kept = sum(1 for c in claims if c.survived())
+        self.say(f"      · {kept}/{len(claims)} opportunity finding(s) "
+                 f"survived")
 
     # -- what it would cost to act on any of this -------------------------
 
@@ -796,12 +1084,14 @@ def cmd_run(args) -> int:
     out = args.out or f"insights-{_slug(args.keyword)}.md"
     data_dir = report_mod.data_dir_for(out)
     manifest = run.manifest()
+    extra = {"opportunities": run.opportunities, "pages": run.pages,
+             "shares": run.share_of_voice}
     text = report_mod.render(run.graph, run.claims, run.trail, manifest,
-                             data_dir)
+                             data_dir, extra)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(text)
     files = report_mod.write_data(data_dir, run.graph, run.claims, run.trail,
-                                  manifest)
+                                  manifest, extra)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as fh:
             json.dump({"manifest": run.manifest(),
@@ -924,6 +1214,10 @@ def main(argv=None) -> int:
                    help="skip the closing forecast call. It is the single "
                         "most useful $0.09 in the run, so skip it only when "
                         "the question is not about acquisition")
+    r.add_argument("--no-ground", action="store_true",
+                   help="do not read page one for the largest searches. "
+                        "They are then admitted on their words alone, which "
+                        "is how `top modelling` got into `cad to bim`")
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--offline", action="store_true",
                    help="replay cached responses only; a miss is an error")

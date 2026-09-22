@@ -72,7 +72,8 @@ def run_one(case: dict, arm: str, live: bool) -> dict:
 
 
 DATA_FILES = ("keywords.csv", "series.csv", "topics.csv", "offerings.csv",
-              "tested.csv", "trail.csv", "network.json", "forecast.json",
+              "tested.csv", "trail.csv", "opportunities.csv", "page_one.csv",
+              "share_of_voice.csv", "network.json", "forecast.json",
               "run.json")
 
 

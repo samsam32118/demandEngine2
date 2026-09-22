@@ -288,37 +288,46 @@ def offline() -> None:
           sent[1]["bid"] == 1)
 
     print("harvesting from who ranks")
-    md = "\n".join([
-        "### Ambulance and Patient Transport Software", "",
-        "Radar Healthcare", "https://radarhealthcare.com › solutions › ambulance", "",
-        "Software that helps ambulance trusts manage quality and compliance "
-        "across every station in the service.", "",
-        "### EMS Software - Prices & Reviews", "",
-        "https://www.getapp.co.uk › directory › ems-software", "",
-        "Compare the best EMS software of 2026 with verified user reviews "
-        "and side by side feature comparisons.", "",
-        "### European Professional Club Rugby", "",
-        "https://en.wikipedia.org › wiki › European_Professional_Rugby", "",
-        "European Professional Club Rugby is the governing body organising "
-        "the two major club rugby union tournaments in Europe."])
-    got = S.parse_markdown(md)
-    check("organic results are recovered from the rendered page",
-          len(got) == 3, f"{len(got)}")
-    check("the domain is read off the breadcrumb",
+    page_rows = [
+        {"type": "ai_overview", "domain": "", "title": "", "url": "",
+         "description": ""},
+        {"type": "paid", "domain": "www.bimcorp.com", "title": "BIM",
+         "url": "https://www.bimcorp.com", "description": ""},
+        {"type": "organic", "domain": "www.radarhealthcare.com",
+         "title": "Ambulance and Patient Safety Software",
+         "url": "https://www.radarhealthcare.com/ambulance",
+         "description": "Trusted by ambulance trusts across the UK"},
+        {"type": "people_also_ask", "domain": "", "title": "", "url": "",
+         "description": ""},
+        {"type": "organic", "domain": "www.getapp.co.uk",
+         "title": "EMS Software - Prices & Reviews",
+         "url": "https://www.getapp.co.uk/directory/ems-software",
+         "description": "Compare the best EMS software"},
+        {"type": "organic", "domain": "en.wikipedia.org",
+         "title": "European Professional Club Rugby", "url": "",
+         "description": "The governing body"}]
+    got = S.organic(page_rows)
+    check("organic results are read from DataForSEO's typed page",
           [r.domain for r in got]
           == ["radarhealthcare.com", "getapp.co.uk", "wikipedia.org"],
           str([r.domain for r in got]))
-    check("the heading above becomes the title",
-          got[0].title.startswith("Ambulance and Patient"))
-    check("the snippet is the first substantial line below",
-          "ambulance trusts" in got[0].snippet)
+    check("ranks count organic results only, from one",
+          [r.rank for r in got] == [1, 2, 3])
+    check("the title and snippet come with each result",
+          got[0].title.startswith("Ambulance and Patient")
+          and "ambulance trusts" in got[0].snippet)
+    feats = S.features(page_rows)
+    check("the page's ads, AI overview and question box are counted",
+          feats["ads"] == 1 and feats["ai_overview"] and feats["questions"]
+          and feats["advertisers"] == ["bimcorp.com"])
     check("hosts that rank everywhere and sell nothing are dropped first",
           [r.domain for r in S.plausible_vendors(got)]
           == ["radarhealthcare.com", "getapp.co.uk"])
     check("www and bare subdomains are stripped",
           S._registrable("www.Example.CO.UK") == "example.co.uk")
-    check("a page with neither title nor snippet is not a result",
-          S.parse_markdown("https://nothing.com › x") == [])
+    check("the SERP runs on DataForSEO, not a third vendor",
+          "brightdata" not in open(os.path.join(HERE, "serp.py")).read().lower()
+          .replace("bright data scrape", ""))
 
     print("budget and credentials")
     s = seo.Seo(cache_dir="/nonexistent-cache", max_spend_usd=0.05,
@@ -556,11 +565,16 @@ def offline() -> None:
                    "months": [], "source": "expanded"}
                   for t, v, c in [("building modeling", 720, 1.49),
                                   ("bim building modeling", 5400, 30.68),
-                                  ("building modeling software", 90, 12.0)]])
+                                  ("building modeling software", 90, 12.0),
+                                  ("revit tutorial", 30, 1.0),
+                                  ("ifc viewer", 40, 1.0),
+                                  ("bim level 2", 50, 1.0)]])
     nar.add_topic("building modeling", confirmed=True)
     for kw in nar.keywords.values():
         kw.topic, kw.topic_confidence = "building modeling", 1.0
         kw.job, kw.job_confidence, kw.job_certain = "compare", 0.9, True
+    for t in ("revit tutorial", "ifc viewer", "bim level 2"):
+        nar.keywords[t].topic = "other"
     sharp = nar.sharpest_narrowing()
     check("a longer search with more volume than its bare term is not a narrowing",
           sharp is not None and sharp[2].term == "building modeling software")
@@ -584,6 +598,27 @@ def offline() -> None:
     check("with no true narrowing there is no gradient finding",
           only_up.sharpest_narrowing() is None
           and not any(c.kind == "gradient" for c in insights.generate(only_up)))
+    rare = K.Graph("cad to bim", "United States", "en")
+    rare.add_rows([{"term": t, "volume": v, "cpc": c, "competition_index": 20,
+                    "low_bid": 1.0, "high_bid": 2.0, "trend": [], "months": [],
+                    "source": "expanded"}
+                   for t, v, c in [("bim software", 6600, 13.56),
+                                   ("bim drawing software", 10, 50.21),
+                                   ("bim software price", 480, 20.0),
+                                   ("revit", 9900, 5.0), ("ifc viewer", 20, 1),
+                                   ("bim level 2", 30, 1), ("lod 300", 40, 1),
+                                   ("bim execution plan", 50, 1)]])
+    rare.add_topic("bim software", confirmed=True)
+    for kw in rare.keywords.values():
+        kw.topic, kw.topic_confidence = "bim software", 1.0
+        kw.job, kw.job_confidence, kw.job_certain = "compare", 0.9, True
+    for t in ("revit", "ifc viewer", "bim level 2", "lod 300",
+              "bim execution plan"):
+        rare.keywords[t].topic = "other"
+    sharp = rare.sharpest_narrowing()
+    check("a narrowing searched less than the typical search is a curiosity, "
+          "not a second kind of buyer",
+          sharp is not None and sharp[2].term == "bim software price")
 
     print("money out of proportion")
     def market_of(rows_, certain=True):
@@ -648,6 +683,10 @@ def offline() -> None:
                 def score(self, key):
                     return type("S", (), {"normalized": 0.7,
                                           "label": "A choice",
+                                          "legend": {"0": "Nothing",
+                                                     "1": "Colour",
+                                                     "2": "A choice",
+                                                     "3": "A reversal"},
                                           "probabilities": {"0": 0.1, "1": 0.1,
                                                             "2": 0.7, "3": 0.1}})()
             return R()
@@ -889,7 +928,9 @@ def offline() -> None:
     check("every data file is written",
           names == sorted(["keywords.csv", "series.csv", "topics.csv",
                            "offerings.csv", "tested.csv", "trail.csv",
-                           "network.json", "forecast.json", "run.json"]))
+                           "opportunities.csv", "page_one.csv",
+                           "share_of_voice.csv", "network.json",
+                           "forecast.json", "run.json"]))
     check("one row per keyword, with its three axes",
           len(kw_rows) == len(cad.keywords)
           and {"about", "wants", "answer"} <= set(kw_rows[0]))
@@ -909,6 +950,317 @@ def offline() -> None:
           == sorted(r["offering"] for r in cad.offering_rows()))
     check("the network file says its calibration is unverified",
           "unverified" in net["what_this_is"])
+
+    print("close variants")
+    wave = [100 + (i % 7) * 13 for i in range(24)]
+    other = [300 + (i % 5) * 17 for i in range(24)]
+    months24 = [f"{y}-{m:02d}" for y in (2024, 2025) for m in range(1, 13)]
+
+    def row(term, volume, trend):
+        return {"term": term, "volume": volume, "cpc": 2.0,
+                "competition_index": 10, "low_bid": 1.0, "high_bid": 3.0,
+                "trend": list(trend), "months": months24,
+                "source": "expanded"}
+    cv = K.Graph("bim services", "United States", "en")
+    cv.add_rows([row("bim service", 590, wave),
+                 row("bim services", 590, wave),
+                 row("bim services company", 590, wave),
+                 row("bim consulting", 590, other)])
+    check("Google's close variants are one search, kept as an alias",
+          "bim service" in cv.keywords and "bim services" not in cv.keywords
+          and "bim services" in cv.keywords["bim service"].aliases)
+    check("a variant one word longer is still the same search",
+          "bim services company" not in cv.keywords
+          and cv.variants_collapsed == 2)
+    check("the same volume with a different series is a different search",
+          "bim consulting" in cv.keywords)
+    flat = K.Graph("x", "United States", "en")
+    flat.add_rows([row("bim service", 10, [10] * 24),
+                   row("bim services", 10, [10] * 24)])
+    check("a flat series identifies nothing", len(flat.keywords) == 2)
+
+    print("page one")
+    rows_ = [{"type": "paid", "domain": "www.ads.com", "rank": 1},
+             {"type": "organic", "domain": "www.quora.com", "url": "u1",
+              "title": "Q", "description": "d1"},
+             {"type": "people_also_ask", "domain": ""},
+             {"type": "organic", "domain": "united-bim.com", "url": "u2",
+              "title": "U", "description": "d2"}]
+    org = S.organic_rows(rows_)
+    check("page one's organic rows are ranked from one, without www",
+          [(r["rank"], r["domain"]) for r in org]
+          == [(1, "quora.com"), (2, "united-bim.com")]
+          and org[0]["description"] == "d1")
+
+    class _Ground:
+        """Page one about the market for one search, about fashion for the
+        other."""
+        def __init__(self):
+            self.asked = {}
+        def ask(self, state, questions):
+            self.asked = questions
+            class R:
+                usage = jev.Usage()
+                def noul(_, key):
+                    q = questions[key].instructions
+                    fashion = any("models agency" in line
+                                  for line in q["first_page"])
+                    return type("N", (), {"noul": 0.1 if fashion else 0.9,
+                                          "yes": lambda self_, t=0.5:
+                                          (0.1 if fashion else 0.9) > t})()
+            return R()
+    fake = _Ground()
+    gg = K.Graph("cad to bim", "United States", "en")
+    gg.add_rows([row("top modelling", 8100, wave),
+                 row("cad to bim services", 100, other)])
+    drop, st = judge.ground(fake, gg, {
+        "top modelling": [{"domain": "img.com", "title": "IMG models agency",
+                           "description": "Top models agency in NYC"}],
+        "cad to bim services": [{"domain": "united-bim.com",
+                                 "title": "CAD to BIM conversion services",
+                                 "description": ""}],
+        "unread": []}, "a founder")
+    check("a search whose first page is about something else is dropped",
+          drop == ["top modelling"] and st.questions == 2)
+    first = next(iter(fake.asked.values())).instructions
+    check("the question carries the page, the market and the relevance "
+          "criteria", first["market"] == "cad to bim"
+          and first["first_page"] and "question" in first
+          and next(iter(fake.asked.values())).criteria
+          == judge.RELEVANCE_CRITERIA)
+    check("a page with no results is not asked about", st.questions == 2)
+
+    print("where to win")
+    import opportunity as O
+    check("the click weights fall with position, the top three most of it",
+          O.click_weight(1) > O.click_weight(2) > O.click_weight(10) > 0
+          and O.click_weight(11) == 0
+          and sum(O.CTR_BY_POSITION[:3]) / sum(O.CTR_BY_POSITION) > 0.7)
+    page = [{"rank": 1, "kind": "specialist"}, {"rank": 2, "kind": "community"},
+            {"rank": 3, "kind": "major_brand"}]
+    split = O.click_split(page)
+    check("page one's clicks split by kind, weighted by position, summing "
+          "to one", abs(sum(split.values()) - 1) < 1e-9
+          and split["specialist"] > split["community"] > split["major_brand"])
+
+    def buyer(term, volume, cpc, offering="service"):
+        kw = K.Keyword(term, volume, cpc, trend=[], months=[],
+                       source="site:a.com")
+        kw.job, kw.job_certain = "buy", True
+        kw.offering, kw.offering_certain = offering, True
+        kw.topic = "bim services"
+        return kw
+
+    def serp(*urls):
+        return [{"rank": i + 1, "domain": u.split("/")[0], "url": u,
+                 "title": u, "description": ""} for i, u in enumerate(urls)]
+    a_, b_, c_ = (buyer("bim modeling services", 390, 70.0),
+                  buyer("bim modelling services", 90, 60.0),
+                  buyer("revit families", 900, 3.0, "software"))
+    pages = {a_.term: serp("x.com/1", "y.com/2", "z.com/3", "w.com/4"),
+             b_.term: serp("y.com/2", "x.com/1", "z.com/3", "v.com/9"),
+             c_.term: serp("x.com/1", "q.com/7", "r.com/8", "s.com/9")}
+    groups = O.serp_clusters([a_, b_, c_], pages)
+    check("three shared results make one page's work; one does not",
+          [[k.term for k in g_.keywords] for g_ in groups]
+          == [[a_.term, b_.term], [c_.term]])
+    for r, kind in zip(groups[0].page, ("specialist", "community",
+                                        "community", "list")):
+        r["kind"] = kind
+    for r, kind in zip(groups[1].page, ("major_brand", "specialist",
+                                        "list", "specialist")):
+        r["kind"] = kind
+    check("open value is the buyer money times the clicks on weak pages",
+          abs(groups[0].open_value
+              - groups[0].prize * groups[0].weak_share) < 1e-9
+          and groups[0].weak_share > 0 and groups[1].open_value == 0)
+    wg = K.Graph("cad to bim", "United States", "en")
+    for kw in (a_, b_, c_):
+        wg.keywords[kw.term] = kw
+    a_.difficulty, b_.difficulty, c_.difficulty = 30, 30, 5
+    front = O.pareto(O.candidates(groups))
+    check("the front keeps genuine trade-offs: more money against an easier "
+          "page one", [c.anchor.term for c in front]
+          == ["bim modeling services", "revit families"])
+    c_.difficulty = 40
+    check("and drops what another beats on every count",
+          [c.anchor.term for c in O.pareto(O.candidates(groups))]
+          == ["bim modeling services"])
+    c_.difficulty = 5
+    words = O.rank_words(front)
+    check("each choice is described by where it stands, in words",
+          "the most buyer money of the 2" in words["bim modeling services"]
+          and "the easiest of the 2" in words["revit families"]
+          and "all pages built for it" in words["revit families"])
+    start = O.start_here(wg, front[0], front)
+    check("start here names the pick and the choices nothing beats",
+          len(start) == 1 and "bim modeling services" in start[0].headline
+          and "y.com at 2" in start[0].text and "revit families" in
+          start[0].text)
+    door = O.open_door(wg, groups)
+    check("the open door is the most buyer money on a weak page one",
+          len(door) == 1 and "bim modeling services" in door[0].headline
+          and O.open_door(wg, groups, groups[0]) == []
+          and O.open_door(wg, groups[1:]) == [])
+    pair = O.weak_spots(wg, groups)
+    check("the weak-spot reading is a mirror pair for the account test",
+          {c.kind for c in pair} == {"weak_open", "weak_closed"}
+          and pair[0].assertion == pair[1].forbids)
+    costs = O.customer_cost(wg)
+    check("one kind of buyer with a single search is not split out",
+          len(costs) == 1 and costs[0].headline.startswith("A lead costs")
+          and [r["offering"] for r in costs[0].evidence["by_offering"]]
+          == ["service"])
+    d_ = buyer("revit plugins", 300, 4.0, "software")
+    wg.keywords[d_.term] = d_
+    costs = O.customer_cost(wg)
+    check("a lead's cost is split by what the buyer wants",
+          len(costs) == 1 and "services" in costs[0].headline
+          and "software" in costs[0].headline
+          and [r["offering"] for r in costs[0].evidence["by_offering"]]
+          == ["service", "software"])
+    del wg.keywords[d_.term]
+    owners = O.who_owns(wg, [
+        {"domain": "www.quora.com", "etv": 50.0, "keywords": 9},
+        {"domain": "www.united-bim.com", "etv": 30.0, "keywords": 5},
+        {"domain": "united-bim.com", "etv": 10.0, "keywords": 3},
+        {"domain": "tesla-outsourcing.com", "etv": 20.0, "keywords": 4}],
+        {"quora.com": "community"})
+    check("share of voice merges www and names businesses, not forums",
+          owners and owners[0].evidence["leader"] == "united-bim.com"
+          and owners[0].evidence["leader_share"] == round(40 / 110, 3)
+          and "www." not in owners[0].text)
+
+    branded = buyer("revit price", 1000, 8.6, "software")
+    branded.entities = ["revit"]
+    brand_pages = {branded.term: serp("autodesk.com/p", "reddit.com/r",
+                                      "g2.com/x")}
+    brand_group = O.serp_clusters([branded], brand_pages)
+    for r, kind in zip(brand_group[0].page, ("major_brand", "community",
+                                             "list")):
+        r["kind"] = kind
+    check("buyers looking for a company by name are no one else's to win",
+          brand_group[0].weak_share > 0 and brand_group[0].open_value == 0
+          and O.candidates(brand_group) == []
+          and O.open_door(wg, brand_group) == [])
+
+    print("settled is about buyers")
+    def topic_market(rows_):
+        g_ = K.Graph("cad to bim", "United States", "en")
+        g_.add_rows([{"term": t, "volume": v, "cpc": 5.0,
+                      "competition_index": 20, "low_bid": 1.0,
+                      "high_bid": 9.0, "trend": [], "months": [],
+                      "source": "site:a.com"} for t, v, _, _, _ in rows_])
+        for t, _, topic, job, ents in rows_:
+            kw = g_.keywords[t]
+            kw.topic, kw.topic_confidence = topic, 0.9
+            kw.job, kw.job_confidence, kw.job_certain = job, 0.9, True
+            kw.entities = list(ents)
+            g_.add_topic(topic, confirmed=True)
+        return g_
+    defs = topic_market([
+        ("revit price", 1000, "bim software", "buy", ["revit"]),
+        ("buy revit", 500, "bim software", "buy", ["revit"]),
+        ("bim software", 6600, "bim software", "compare", []),
+        ("what is building information management", 5400,
+         "building information management", "learn", []),
+        ("building information management guide", 900,
+         "building information management", "learn", []),
+        ("bim services", 590, "bim services", "buy", []),
+        ("bim modeling services", 390, "bim services", "buy", [])])
+    settled = [c for c in insights.generate(defs) if c.kind == "settled"]
+    check("a topic nobody shops in is not called unsettled",
+          settled and "building information management" not in settled[0].text
+          and "bim services" in settled[0].headline
+          and "shopping" in settled[0].text)
+    diy = [("free bim software", 800, "bim software", "self_serve", []),
+           ("revit crack", 300, "bim software", "self_serve", ["revit"])]
+    base = [("revit price", 1000, "bim software", "buy", ["revit"]),
+            ("bim software", 6600, "bim software", "compare", []),
+            ("bim services", 590, "bim services", "buy", []),
+            ("what is bim", 9000, "bim", "learn", [])]
+    fewer = [c for c in insights.generate(topic_market(base + diy))
+             if c.kind == "selfserve"]
+    more = [c for c in insights.generate(topic_market(
+        base + diy + [("bim tutorial free", 9900, "bim", "self_serve", [])]))
+        if c.kind == "selfserve"]
+    check("doing without is not called the competitor when fewer do it than "
+          "shop", fewer == [])
+    check("and is when more do", len(more) == 1
+          and "more than the" in more[0].text)
+
+    arm = start + door + pair + costs + owners + O.switching(wg) \
+        + O.new_demand(wg)
+    try:
+        insights.select_by_code(wg, arm)
+        check("the threshold arm reads the where-to-win families",
+              all(c.verdict in ("kept", "below threshold") for c in arm))
+    except Exception as exc:  # noqa: BLE001 — the regression is any raise
+        check("the threshold arm reads the where-to-win families", False,
+              repr(exc))
+
+    print("the value floor")
+    def _stakes(probabilities):
+        class _Floor:
+            def ask(self, state, questions):
+                class R:
+                    usage = jev.Usage()
+                    def noul(self, key):
+                        v = {"true": 0.9, "swap": 0.1, "obvious": 0.1,
+                             "odd": 0.5}
+                        return type("N", (), {"noul": v[key.split(":")[0]]})()
+                    def choice(self, key):
+                        return type("C", (), {
+                            "choice": "statement",
+                            "probabilities": {"statement": 0.8, "rival": 0.1,
+                                              "neither": 0.1},
+                            "confidence": 0.8})()
+                    def score(self, key):
+                        return type("S", (), {
+                            "normalized": 0.5, "label": "Colour",
+                            "legend": {"0": "Nothing", "1": "Colour",
+                                       "2": "A choice", "3": "A reversal"},
+                            "probabilities": probabilities})()
+                return R()
+        claim = next(c for c in insights.generate(ms_graph)
+                     if c.kind == "money_seat")
+        judge.adjudicate(_Floor(), ms_graph, [claim], "a founder")
+        return claim
+    spread = _stakes({"0": 0.32, "1": 0.20, "2": 0.36, "3": 0.12})
+    check("a decision must win a majority, not a plurality",
+          spread.verdict == "changes nothing" and spread.decides < 0.5)
+    colour = _stakes({"0": 0.10, "1": 0.45, "2": 0.30, "3": 0.15})
+    check("colour short of a majority for a decision is background",
+          colour.verdict == "background" and not colour.survived())
+    kept_ = _stakes({"0": 0.10, "1": 0.35, "2": 0.30, "3": 0.25})
+    check("a majority for a decision is kept, labelled by the decision side",
+          kept_.survived() and kept_.stakes_label == "A choice")
+
+    print("decisions skip the swap test")
+    class _Count:
+        def __init__(self):
+            self.keys = []
+        def ask(self, state, questions):
+            self.keys = list(questions)
+            return _Floor_result()
+    class _Floor_result:
+        usage = jev.Usage()
+        def noul(self, key):
+            return type("N", (), {"noul": 0.9 if key.startswith("true")
+                                  else 0.1})()
+        def choice(self, key):
+            return type("C", (), {"choice": "statement",
+                                  "probabilities": {"statement": 0.8},
+                                  "confidence": 0.8})()
+        def score(self, key):
+            return type("S", (), {"normalized": 0.7, "label": "A choice",
+                                  "legend": {"2": "A choice"},
+                                  "probabilities": {"2": 0.8}})()
+    counter = _Count()
+    judge.adjudicate(counter, wg, start + door + pair, "a founder")
+    check("no swap question is asked of a decision-shaped claim",
+          not any(k.startswith("swap:") for k in counter.keys)
+          and all(c.swappable == 0.0 for c in start + door + pair))
 
     print("question shapes")
     try:
