@@ -897,7 +897,10 @@ class Run:
         for c in groups:
             self.stage(judge.read_page_one(self.client, g, c.anchor.term,
                                            c.page, a.asker))
-        self.opportunities = O.by_open_value(groups)
+        # The file reads as "where the buyer money is", most first — the
+        # same order as the line under the report's title.
+        self.opportunities = sorted(groups, key=lambda c: (
+            -c.open_prize, -c.prize, c.anchor.term))
         if groups:
             covered = K.share(sum(c.prize for c in groups),
                               sum(k.money for k in O.buying_core(g)))
