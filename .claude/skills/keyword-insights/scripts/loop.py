@@ -85,6 +85,7 @@ class Run:
         self.evidence: dict[str, float] = {}
         self.verdict: dict[str, float] = {}
         self.prior: dict[str, float] = {}
+        self.forecast: dict | None = None
         self.log: list[str] = []
         self.oriented_at = -1
         self.started = time.time()
@@ -353,9 +354,60 @@ class Run:
         if len(self.graph.keywords) != self.oriented_at:
             self.orient(a.iterations)
             kept = self.find_claims()
+        if not self.args.no_forecast:
+            self.price_the_move()
         kept = [c for c in self.claims if c.survived()]
         self.say(f"\n{len(kept)} finding(s) survived · "
                  f"{self.seo.ledger.line()} · {self.jev_usage.line()}")
+
+    # -- what it would cost to act on any of this -------------------------
+
+    # Which searchers you would actually bid on. Not everyone who searches:
+    # someone reading a definition or hunting a job is not a click worth
+    # buying, and including them would forecast a market that does not
+    # exist.
+    BIDDABLE = ("buy", "compare", "local")
+
+    def price_the_move(self) -> None:
+        """One call that turns the whole report into a decision.
+
+        Search volume says how many people look. This says how many of them
+        can actually be bought and what they would cost — Google's own
+        forecast rather than volume multiplied by a headline click price.
+        The difference matters: a market with 165,000 searches a month can
+        have 232 clicks available at a bid worth making, and knowing that
+        before committing a budget is most of the value of the exercise.
+
+        The bid is derived, not invented: the median top-of-page bid already
+        measured on the very keywords being forecast.
+        """
+        targets = sorted(
+            (k for k in self.graph.certain
+             if k.job in self.BIDDABLE and k.volume > 0 and k.high_bid > 0),
+            key=lambda k: -k.volume)[:seo.MAX_FORECAST]
+        if len(targets) < 3:
+            self.say("      · too few biddable searches to forecast")
+            return
+        bid = K.median([k.high_bid for k in targets])
+        if bid <= 0:
+            return
+        self.say(f"  PRICE    what it costs to reach the "
+                 f"{len(targets):,} searches worth bidding on")
+        try:
+            call = self.seo.forecast([k.term for k in targets], bid=bid)
+        except (seo.BudgetExceeded, seo.OfflineMiss, seo.SeoError) as exc:
+            self.say(f"      · not priced: {exc}")
+            return
+        if not call.rows:
+            return
+        row = dict(call.rows[0])
+        row["keywords"] = len(targets)
+        row["searches"] = sum(k.volume for k in targets)
+        row["budget"] = self.args.budget
+        self.forecast = row
+        self.say(f"      · {row['clicks']:,.0f} clicks/month at "
+                 f"${row['cpc']:.2f} each = ${row['cost']:,.0f}/month "
+                 f"(bid ${bid:.2f})")
 
     def _merge(self, new: list[insights.Thread]) -> list[insights.Thread]:
         """The open threads: what is on the table and not yet paid for."""
@@ -398,6 +450,7 @@ class Run:
                     (self.net.attribution(d, self.evidence) if self.net else [])]
                 for d in MN.DECISION},
             "unsplittable_rows": (self.net.low_confidence if self.net else []),
+            "forecast": self.forecast,
             "trail": [asdict(t) for t in self.trail],
         }
 
@@ -440,8 +493,11 @@ def plan(args) -> int:
     print(json.dumps({
         "seed": args.keyword,
         "location": args.location,
-        "billable_dataforseo_calls_at_most": args.iterations,
-        "dataforseo_ceiling_usd": round(min(worst, args.max_spend), 2),
+        "billable_dataforseo_calls_at_most": args.iterations
+        + (0 if args.no_forecast else 1),
+        "dataforseo_ceiling_usd": round(
+            min(worst + (0 if args.no_forecast else per_call),
+                args.max_spend), 2),
         "jev_estimate_usd": round(0.01 * args.iterations, 3),
         "note": "DataForSEO bills per call regardless of how many keywords "
                 "it carries; each price probe fills up to 1000 slots. "
@@ -482,6 +538,10 @@ def main(argv=None) -> int:
                    help="symbol for click prices. DataForSEO returns them "
                         "unlabelled and documents them as US dollars; set "
                         "this if your Google Ads account bills otherwise")
+    r.add_argument("--budget", type=float,
+                   help="what you could spend a month. Given one, the "
+                        "report says what it buys and whether the market "
+                        "can absorb it")
     r.add_argument("--max-spend", type=float, default=1.00,
                    help="hard ceiling in USD, checked before each call")
     r.add_argument("--judge-cap", type=int, default=DEFAULT_JUDGE_CAP)
@@ -491,6 +551,10 @@ def main(argv=None) -> int:
                         "hand-tuned-threshold control arm")
     r.add_argument("--out", help="report path (default insights-<seed>.md)")
     r.add_argument("--json", help="also dump graph, claims and ledger here")
+    r.add_argument("--no-forecast", action="store_true",
+                   help="skip the closing forecast call. It is the single "
+                        "most useful $0.09 in the run, so skip it only when "
+                        "the question is not about acquisition")
     r.add_argument("--dry-run", action="store_true")
     r.add_argument("--offline", action="store_true",
                    help="replay cached responses only; a miss is an error")

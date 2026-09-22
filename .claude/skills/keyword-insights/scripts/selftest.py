@@ -169,6 +169,19 @@ def offline() -> None:
           all(len(t.payload) <= seo.MAX_PRICED
               for t in threads if t.action == "price"))
 
+    print("the forecast")
+    agg = seo.normalise_forecast([{"keyword": None, "clicks": 232.31,
+                                   "average_cpc": 8.0, "cost": 1857.62,
+                                   "bid": 12, "match": "exact"}])
+    check("the aggregate row is read, not skipped for having no keyword",
+          len(agg) == 1 and abs(agg[0]["clicks"] - 232.31) < 1e-9)
+    check("a response with no clicks yields nothing rather than zeroes",
+          seo.normalise_forecast([{"keyword": None}]) == [])
+    check("the forecast asks for no history",
+          "date_from" not in seo.Seo(cache_dir="/tmp/x")._geo({}, history=False))
+    check("every other call still asks for four years",
+          "date_from" in seo.Seo(cache_dir="/tmp/x")._geo({}))
+
     print("budget and credentials")
     s = seo.Seo(cache_dir="/nonexistent-cache", max_spend_usd=0.05,
                 offline=False)

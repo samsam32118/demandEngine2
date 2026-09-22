@@ -441,3 +441,58 @@ a weaker claim than being right.
 | selftest | 43 | **54** |
 | jev eval checks | 9/9 | **18/18** |
 | cost of re-inferring after new evidence | one request | **cached — $0.0003** |
+
+---
+
+## it-12 — what it would cost to act
+
+The baselines beat this skill on the ad-budget prompt, and the ledger said
+why: one answered *"£4,000 ≈ 1,250 clicks; on broad match your budget lasts
+four days"* and this one answered *"89% shopping intent"*. One changes what
+someone does on Monday.
+
+Every run now closes with `ad_traffic_by_keywords` on the searches worth
+bidding on — `buy`, `compare` and `local` intents only, because forecasting
+clicks from people reading definitions and hunting jobs prices a market that
+does not exist. The bid is the median top-of-page bid already measured on
+those keywords, so nothing about it is invented.
+
+**Search volume and buyable clicks are different numbers, usually by an
+order of magnitude.** Five project-management head terms carrying 165,000
+searches a month forecast **232 clicks** at a $12 bid. A reader who sized a
+budget from the volume would be out by a factor of seven hundred.
+
+Two things the call gives away that nothing else does:
+
+- **You do not pay your bid.** $12 bid, $8.00 actual — the auction saying
+  how much of your maximum it needs.
+- **A market can have less to sell than you were going to spend.** The most
+  useful sentence the report can produce is not "this will cost you X" but
+  "X is more than this market has; the constraint is not your budget".
+
+Three defects found and fixed on the way in:
+
+1. `_geo` added `date_from` to every call, and the forecast endpoint rejects
+   it outright — correctly, since there is no history in a prediction. It
+   failed loudly rather than billing wrongly.
+2. The endpoint returns **one aggregate row with `keyword: null`**, not a
+   row per keyword. The first normaliser dropped it for having no keyword
+   and reported zero clicks with a straight face.
+3. `--dry-run` under-counted the ceiling by one call.
+
+| metric | it-11 | it-12 |
+|---|---|---|
+| selftest | 54 | **58** |
+| jev eval checks | 18/18 | **22/22** |
+| code arm | 17/22 | 17/22 |
+| default run cost | ~$0.28 | **~$0.37** |
+
+The extra nine cents buys the only number in the report a reader can put in
+a spreadsheet.
+
+**A note on the control arm.** It now fails five checks to the judged arm's
+zero, but two of those failures are an artifact: the arms select different
+claims, so they chase different probes, so the threshold arm's forecast
+keywords miss the frozen cache. The comparison that matters is unchanged —
+it keeps 86% of everything it generates, against 28%, and still reports a
+confident finding about the market that does not exist.

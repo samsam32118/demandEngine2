@@ -150,6 +150,33 @@ published benchmark, so there is no established answer to check against.
 Direction and size of movement are the signal; the absolute figure is an
 estimate.
 
+## What it would cost to act on it
+
+Every run closes with one more call: Google's own forecast for the searches
+here worth bidding on — the ones where someone is buying, comparing or
+looking for a supplier nearby, not reading a definition or hunting a job.
+
+```bash
+loop.py run "garden rooms" --location "United Kingdom" --budget 4000 --currency "£"
+```
+
+> **£4,000 a month buys about 1,389 of the 3,069 clicks available** — 45% of
+> what this market has to sell at this bid.
+>
+> You would bid £4.78 and pay £2.88 — 40% under your maximum.
+
+Search volume says how many people look. This says how many of them can be
+bought and what they cost, which is a different number and usually a much
+smaller one: a market with 165,000 searches a month can have 232 clicks
+available at a bid worth making. Knowing that before committing a budget is
+most of the value of the exercise, and it is the difference between a report
+that describes a market and one that answers what to do about it.
+
+The bid is derived, not invented — the median top-of-page bid already
+measured on the very keywords being forecast. `--budget` adds what yours
+buys, including the case that matters most: when the market has less to sell
+than you were going to spend. `--no-forecast` skips the call.
+
 ## The graph
 
 Two axes and one set of names. Every finding is a statement about this
@@ -217,9 +244,9 @@ paid for. Probes are filled to the brim.
 
 | | typical run |
 |---|---|
-| DataForSEO | `--iterations` billable calls, ~$0.09 each |
+| DataForSEO | `--iterations` calls, plus one closing forecast, ~$0.09 each |
 | Jev | $0.01–0.03 — input tokens only, output is free |
-| default `--iterations 3` | **~$0.28 and about 15 seconds** |
+| default `--iterations 3` | **~$0.37 and about 20 seconds** |
 
 `--iterations` defaults to **3**: one call to see the market, one to chase
 what looked odd, one to go elsewhere when that turns out to be a dead end.

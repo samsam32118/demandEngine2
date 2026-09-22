@@ -218,6 +218,66 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
         L.append(_confidence_line(claim, arm))
         L.append("")
 
+    # ---- what acting on it would cost ------------------------------------
+    fc = manifest.get("forecast")
+    if fc:
+        cur = manifest.get("currency", "$")
+        L.append("## What it would cost to act on this")
+        L.append("")
+        L.append(
+            f"Google's own forecast for the {fc['keywords']:,} searches here "
+            f"worth bidding on — the ones where someone is buying, comparing "
+            f"or looking for a supplier nearby, not reading a definition or "
+            f"hunting a job. Bid set at {cur}{fc['bid']:.2f}, the median "
+            f"top-of-page bid already measured on those very keywords, on "
+            f"exact match.")
+        L.append("")
+        L.append("| | |")
+        L.append("|---|---:|")
+        L.append(f"| Clicks available a month | **{fc['clicks']:,.0f}** |")
+        L.append(f"| What each actually costs | {cur}{fc['cpc']:,.2f} |")
+        L.append(f"| To take all of them | **{cur}{fc['cost']:,.0f} a month** |")
+        L.append(f"| Searches behind it | {n(fc['searches'])} a month |")
+        L.append("")
+        if fc.get("bid", 0) > 0 and fc["cpc"] > 0 and fc["cpc"] < fc["bid"]:
+            L.append(
+                f"You would bid {cur}{fc['bid']:.2f} and pay "
+                f"{cur}{fc['cpc']:.2f} — {1 - fc['cpc'] / fc['bid']:.0%} under "
+                f"your maximum. That gap is the auction saying how much of "
+                f"your bid it actually needs.")
+            L.append("")
+        # The ratio a reader cannot get anywhere else: what a market can
+        # absorb, against what they were going to spend.
+        budget = fc.get("budget")
+        if budget:
+            if fc["cost"] <= 0:
+                covers = 1.0
+            else:
+                covers = min(1.0, budget / fc["cost"])
+            if budget >= fc["cost"]:
+                L.append(
+                    f"**{cur}{budget:,.0f} a month is more than this market "
+                    f"has to sell.** Taking every click worth buying costs "
+                    f"{cur}{fc['cost']:,.0f}, so the constraint here is not "
+                    f"your budget — it is that only {fc['clicks']:,.0f} "
+                    f"people a month can be bought at this bid. Spending "
+                    f"the rest means bidding on searches that are not "
+                    f"buying, or finding customers somewhere other than "
+                    f"search.")
+            else:
+                L.append(
+                    f"**{cur}{budget:,.0f} a month buys about "
+                    f"{fc['clicks'] * covers:,.0f} of the "
+                    f"{fc['clicks']:,.0f} clicks available** — {covers:.0%} "
+                    f"of what this market has to sell at this bid. There is "
+                    f"room here to spend more than you planned.")
+            L.append("")
+        L.append(
+            "A forecast is what Google expects to deliver, not a quote. It "
+            "assumes you win the auctions it thinks you will win; a new "
+            "account with no history usually does worse at first.")
+        L.append("")
+
     # ---- the trail ------------------------------------------------------
     L.append("## How this was arrived at")
     L.append("")

@@ -39,6 +39,7 @@ MAX_ATTEMPTS = 5
 # Hard limits imposed by the Google Ads API behind DataForSEO.
 MAX_SEEDS = 20          # keywords_for_keywords
 MAX_PRICED = 1000       # search_volume
+MAX_FORECAST = 1000     # ad_traffic_by_keywords
 
 CRED_ENV = ("DATA_FOR_SEO_LOGIN", "DATA_FOR_SEO_PASSWORD")
 
@@ -66,7 +67,14 @@ ENDPOINTS = {
     "expand": "keywords_data/google_ads/keywords_for_keywords/live",
     "price": "keywords_data/google_ads/search_volume/live",
     "site": "keywords_data/google_ads/keywords_for_site/live",
+    "forecast": "keywords_data/google_ads/ad_traffic_by_keywords/live",
 }
+
+# Exact match, because it is the only honest default. Broad match forecasts
+# a much larger click volume by counting searches that merely resemble the
+# keyword, which is how a budget that looks like three months of traffic
+# turns out to be four days of it.
+DEFAULT_MATCH = "exact"
 
 
 class SeoError(RuntimeError):
@@ -224,6 +232,31 @@ def _trend(monthly: list[dict] | None) -> tuple[list[int], list[str]]:
     return volumes, labels
 
 
+def normalise_forecast(result: list[dict] | None) -> list[dict]:
+    """The one aggregate row this endpoint returns.
+
+    Not one row per keyword — Google forecasts the campaign, not the term.
+    One row carrying clicks a month, what each would actually cost, and the
+    total. The gap between the bid you set and the `average_cpc` you get
+    back is the auction telling you that you do not pay your maximum.
+    """
+    for r in result or []:
+        clicks = r.get("clicks")
+        if clicks is None:
+            continue
+        return [{
+            "clicks": float(clicks),
+            "cpc": float(r.get("average_cpc") or 0.0),
+            "cost": float(r.get("cost") or 0.0),
+            "impressions": float(r.get("impressions") or 0.0),
+            "ctr": float(r.get("ctr") or 0.0),
+            "bid": float(r.get("bid") or 0.0),
+            "match": r.get("match") or "",
+            "window": r.get("date_interval") or "next_month",
+        }]
+    return []
+
+
 def normalise(result: list[dict] | None, source: str) -> list[dict]:
     rows = []
     for r in result or []:
@@ -281,8 +314,13 @@ class Seo:
                 f"{login}:{password}".encode("utf-8")).decode("ascii")
         return self._auth
 
-    def _geo(self, task: dict) -> dict:
-        task.setdefault("date_from", history_start())
+    def _geo(self, task: dict, *, history: bool = True) -> dict:
+        # The forecast endpoint looks forward and rejects `date_from`
+        # outright, which is right: there is no history to ask for in a
+        # prediction. Every other keyword endpoint takes it and hands back
+        # four years for the price of one.
+        if history:
+            task.setdefault("date_from", history_start())
         if isinstance(self.location, int):
             task["location_code"] = self.location
         elif self.location:
@@ -372,9 +410,11 @@ class Seo:
         key = self._key(endpoint, task)
         started = time.time()
         cached = self._cached(key)
+        shape = normalise_forecast if action == "forecast" else (
+            lambda r: normalise(r, source))
         if cached is not None:
             result, billed = self._unwrap(cached)
-            call = Call(action, endpoint, task, normalise(result, source),
+            call = Call(action, endpoint, task, shape(result),
                         0.0, True, time.time() - started,
                         note or f"cached (would have cost ${billed:.4f})")
             self.ledger.calls.append(call)
@@ -396,7 +436,7 @@ class Seo:
         response = self._post(endpoint, task)
         result, billed = self._unwrap(response)
         self._store(key, response)
-        call = Call(action, endpoint, task, normalise(result, source),
+        call = Call(action, endpoint, task, shape(result),
                     billed, False, time.time() - started, note)
         self.ledger.calls.append(call)
         return call
@@ -434,6 +474,27 @@ class Seo:
             raise SeoError("site needs a domain")
         task = self._geo({"target": target, "target_type": target_type})
         return self._run("site", ENDPOINTS["site"], task, f"site:{target}")
+
+    def forecast(self, keywords: Sequence[str], *, bid: float,
+                 match: str = DEFAULT_MATCH) -> Call:
+        """What these keywords would actually deliver at a given bid.
+
+        Search volume says how many people look; this says how many of them
+        you could buy and what they would cost — Google's own forecast, not
+        volume multiplied by a published click price. The difference is the
+        gap between "there are 165,000 searches a month here" and "you can
+        have 311 clicks of it".
+
+        The bid is not invented: callers derive it from the top-of-page bids
+        already measured on the keywords being forecast.
+        """
+        kws = _clean(keywords)[:MAX_FORECAST]
+        if not kws:
+            raise SeoError("forecast needs at least one keyword")
+        task = self._geo({"keywords": kws, "bid": round(float(bid), 2),
+                          "match": match}, history=False)
+        return self._run("forecast", ENDPOINTS["forecast"], task, "forecast",
+                         note=f"at ${bid:.2f} {match} match")
 
     # -- planning --------------------------------------------------------
 
