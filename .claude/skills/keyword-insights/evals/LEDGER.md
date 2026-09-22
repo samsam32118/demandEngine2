@@ -754,3 +754,133 @@ upgrade to every trend figure.
 | probes | 2 × $0.09 | 1–2 × ~$0.02 |
 | forecast | $0.09 | $0.09 |
 | **typical run** | **$0.45** | **$0.22–0.31** |
+
+---
+
+## it-16 — one dial, and two bugs it uncovered
+
+`--iterations` was the only knob, and raising it made the report worse.
+More probes grow the corpus; nothing else grew with it, so a larger share
+of what was measured never got read. The fix is a single `--effort` dial,
+1 to 5, moving five things together: sites harvested, probes allowed,
+corpus placed on the two axes, claims tested, spend ceiling.
+
+**The dial is the bits floor.** A probe costs $0.09 and buys some expected
+reduction in uncertainty about what the reader came for, so the only real
+question is *how small an answer will you pay $0.09 for* — 0.05 of a bit at
+effort 1, 0.002 at effort 5. That retires the one arbitrary constant in the
+loop: `MIN_EXPECTED_BITS = 0.01` was a number I picked, and it is now the
+caller's choice in units they can argue with.
+
+### The first ladder was measuring a bug
+
+| effort | sites | probes | $data | keywords | coverage | findings |
+|---|---:|---:|---:|---:|---:|---:|
+| 1 glance | 1 | 0 | 0.27 | 97 | 30% | 2 |
+| 3 normal | 2 | 2 | 0.39 | 1,648 | 60% | 6 |
+| 4 deep | 3 | 1 | 0.54 | 1,838 | **43%** | 3 |
+| 5 exhaustive | 4 | 0 | 0.54 | 1,516 | 63% | 4 |
+
+Effort 4 is worse than both its neighbours, which is not a thing a dial is
+allowed to do. The cause was `--relevance-cap`: the filter that decides
+whether a harvested keyword belongs to this market reads the top N by
+volume and **admitted everything below N without asking**.
+
+Sorting by volume checks the incumbent's largest pages first — the ones
+most likely to be its *other* business — so it was fair to wonder whether
+the tail was cleaner than the head. It is not. Of 200 sampled from Radar
+Healthcare's 1,467 unchecked keywords, **17% belonged to this market,
+against 18% of the 400 that were checked**. The cap was admitting about
+1,200 off-market terms into a 1,648-term corpus. Only the volume weighting
+— the tail is 79% of the terms and 5% of the searching — had been keeping
+the reports usable.
+
+**Two fixes.** An unchecked keyword is no longer admitted; and the cap
+stopped being an effort knob. A harvest costs $0.09 whether or not anyone
+reads it, and vetting a keyword costs about a hundred-thousandth of a cent,
+so leaving rows you already bought unread to save $0.016 of judgment is
+backwards. Vetting the whole 1,867-row harvest took Jev from $0.005 to
+$0.022 — 5% of a run's bill — and found 336 in-market keywords where the
+capped filter found 72.
+
+### The ladder, measured properly
+
+Three runs at each level, Jev cache off so every run asks fresh:
+
+| effort | sites | probes | keywords | coverage | findings | $data | $jev |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 glance | 1 | 0 | ~95 | 23–29% | 4, 4, 4 | 0.24 | 0.005 |
+| 3 normal | 2 | 1–2 | 434–735 | 42–57% | 3, 4, 6 | 0.48 | 0.025 |
+| 5 exhaustive | 4 | 2–3 | 731–1,027 | 44–64% | 4, 5, 5 | 0.68 | 0.035 |
+
+**Effort buys coverage, not findings.** The spread in findings within one
+level (3 to 6 at normal) is as wide as the spread across the whole dial.
+Two findings either way is noise, and an earlier draft of this entry
+explained a 6-versus-4 difference as "higher effort produces better-tested
+findings" — a story about a number that turned out to be a coin flip. What
+actually moves is the share of the market a finding is about: 25% → 50% →
+57% of the searching, monotone in the means.
+
+Findings are a count of judgments made one claim at a time, and near the
+0.5 line they go either way between runs. Coverage is arithmetic over the
+whole corpus. That is why the ladder is read on coverage, and why
+`kept_share` is reported as a band rather than a number.
+
+### Two bugs found while measuring
+
+**The forecast bid.** DataForSEO documents `bid` as an integer and enforces
+it unevenly: £24.11 and £10.38 went through, £32.73 came back `50301:
+Request contains an invalid argument`, naming no field. A run that had
+already spent $0.45 on harvesting silently lost its closing forecast — the
+single most useful call in the report — to a rounding decision made three
+functions away. The rounding now happens at the wire, where the contract
+is. Two selftest checks pin it.
+
+**A stray paste in the control arm.** `select_by_code` carried a block of
+follow-up-table code in its `settled` branch, calling an `add` that does
+not exist in that scope. It had never fired, because no corpus the code arm
+had seen produced a `settled` claim; the bigger vetted corpus produced one
+and the arm crashed with a `NameError`. `settled` now has a threshold like
+its siblings, using the `branded_share_high` constant that the paste had
+displaced.
+
+Neither bug was what I was looking for. Both were found by running the same
+thing at five settings and asking why one rung was out of line.
+
+### Where the suite ended up
+
+| | before it-16 | after |
+|---|---:|---:|
+| jev checks | 22/22 | **18/18** |
+| code checks | 5/8 (crashed on one case) | **17/18** |
+| jev `kept_share` | 0.26 | 0.31 |
+| code `kept_share` | 0.86 | 0.86 |
+
+The suite lost four checks and gained a working control arm. Two of the
+lost checks were `must_mention` phrases from the section that prices the
+move, and they were not measuring the method: that section is downstream of
+a forecast call, which is downstream of which keywords Jev placed as
+biddable, so one divergent judgment sends an offline run down an uncached
+path and the call misses. A check that fails for that reason is noise in
+the suite, so the renderer is pinned in `selftest.py` against a forecast
+row supplied directly, and the cases test the method. The other two came
+with `thin-niche`.
+
+**`thin-niche` stopped being thin.** The case was written for an
+eleven-keyword market. Harvesting from the businesses that rank (it-13)
+opens `hvac dispatch software` into the whole field-service-management
+category — 907 keywords, 649,450 searches a month — and being confident
+about *that* is correct. The case now sets `no_harvest`, because what it
+exists to test is the register used on a thin corpus, and it has to keep
+one to test it.
+
+The one remaining failure is `trap-nonexistent/code`, and it is supposed to
+be there: it is it-8's result, still standing. The threshold arm reports a
+confident finding about a market that does not exist, because a threshold
+on a ratio is still satisfied when the ratio is computed from noise.
+
+Two harness changes came out of this. The probes column prints probes
+*followed* rather than probes *billed* — on a warm cache the billed count
+is zero, so the ledger's "did it chase anything" metric had been silently
+reading as "no". And `coverage` is now scored, because it is the metric
+that responds to effort.

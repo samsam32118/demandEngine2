@@ -183,6 +183,24 @@ def offline() -> None:
     check("every other call still asks for four years",
           "date_from" in seo.Seo(cache_dir="/tmp/x")._geo({}))
 
+    # DataForSEO documents `bid` as an integer and enforces it unevenly:
+    # 24.11 and 10.38 were accepted, 32.73 came back as 50301 naming no
+    # field, and a run that had already spent $0.45 lost its forecast.
+    sent = []
+
+    class _Spy(seo.Seo):
+        def _run(self, action, endpoint, task, source, note=""):
+            sent.append(task)
+            return seo.Call(action, endpoint, task, [], 0.0, True, 0.0, note)
+
+    spy = _Spy(cache_dir="/tmp/x")
+    spy.forecast(["a", "b", "c"], bid=32.73)
+    spy.forecast(["a", "b", "c"], bid=0.4)
+    check("the bid goes out as a whole number, as documented",
+          isinstance(sent[0]["bid"], int) and sent[0]["bid"] == 33)
+    check("a sub-unit bid floors at 1 rather than rounding to zero",
+          sent[1]["bid"] == 1)
+
     print("harvesting from who ranks")
     md = "\n".join([
         "### Ambulance and Patient Transport Software", "",
@@ -264,6 +282,23 @@ def offline() -> None:
           "Checked, and it did not hold" in md or
           all(c.survived() for c in claims))
     check("report shows the trail", "mermaid" in md)
+
+    # The "what it would cost to act" section is downstream of a forecast
+    # call, which is downstream of which keywords Jev placed as biddable.
+    # That makes it the one section an offline eval cannot guarantee it
+    # will see — a single divergent judgment sends the run down an uncached
+    # path and the call misses. So the renderer is pinned here instead of
+    # in a case, against a forecast row supplied directly.
+    priced = report.render(g, claims, threads[:2], dict(
+        man, forecast={"clicks": 232.31, "cpc": 8.0, "cost": 1857.62,
+                       "impressions": 0.0, "ctr": 0.0, "bid": 12,
+                       "match": "exact", "window": "next_month",
+                       "keywords": 43, "searches": 1810, "budget": None}))
+    check("a forecast becomes the section that prices the move",
+          "What it would cost to act on this" in priced
+          and "Clicks available a month" in priced)
+    check("the bid is printed as the whole number that was sent",
+          "Bid set at $12 " in priced and "Bid set at $12.00" not in priced)
 
     print("the market network")
     # A uniform net must be a net that concludes nothing.

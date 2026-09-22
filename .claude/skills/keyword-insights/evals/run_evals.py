@@ -54,6 +54,7 @@ def run_one(case: dict, arm: str, live: bool) -> dict:
                "--for", case.get("asker", "someone sizing up this market"),
                "--location", case.get("location", "United States"),
                "--arm", arm, "--quiet",
+               *(["--no-harvest"] if case.get("no_harvest") else []),
                "--out", os.path.join(tmp, "r.md"), "--json", js]
         if not live:
             cmd.append("--offline")
@@ -111,6 +112,8 @@ def score(case: dict, data: dict, report: str) -> dict:
         "discrimination": {f: spread(f) for f in
                            ("reads_true", "swappable", "obvious",
                             "surprising")},
+        "coverage": round(man["volume_certain"]
+                           / max(man["volume_measured"], 1), 2),
         "probes_billable": man["dataforseo"]["billable_calls"],
         "probes_total": len(man["trail"]),
         "dead_ends": sum(1 for t in man["trail"]
@@ -156,7 +159,7 @@ def main() -> int:
             print(f"{case['id']:<26s} {arm:<5s} "
                   f"{r['kept']:>3d}/{r['generated']:<5d} "
                   f"{r['distinct_kinds']:>6d} {r['most_repeated_kind']:>4d} "
-                  f"{r['probes_billable']:>7d} {r['dead_ends']:>5d} "
+                  f"{r['probes_total']:>7d} {r['dead_ends']:>5d} "
                   f"{r['passed']:>3d}/{r['of']:<3d} "
                   f"{r['usd_data']:>7.3f} {r['usd_jev']:>7.4f}")
 

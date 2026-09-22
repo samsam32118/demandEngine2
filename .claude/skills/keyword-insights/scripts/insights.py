@@ -593,16 +593,13 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
         keep = True
         kind = claim.kind
         if kind == "settled":
-            # Was a price probe on `<brand> vs / alternative / pricing`
-            # combinations: 0 payoffs in 5 attempts, $0.45 for nothing.
-            # Google barely holds that vocabulary. Harvesting the brand's
-            # own site costs the same $0.09 and returns its whole footprint
-            # — which is what the question was really asking for.
-            brands = ev.get("brands_found") or []
-            add(claim,
-                f"These searchers already name their suppliers — what is "
-                f"the whole vocabulary those suppliers are built on?",
-                "harvest", brands[:1], "supplier")
+            # Both halves have to hold for the sentence to mean anything:
+            # one part of the market named as settled, another named as
+            # open. A gap between two middling shares is not a finding.
+            keep = (ev.get("most_branded", {}).get("branded_share", 0.0)
+                    >= C["branded_share_high"]
+                    and ev.get("least_branded", {}).get("branded_share", 1.0)
+                    <= C["branded_share_low"])
         elif kind == "open":
             keep = ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
         elif kind == "direction":

@@ -9,7 +9,7 @@ One keyword in. A markdown report of data-backed findings out.
 
 ```bash
 python3 .claude/skills/keyword-insights/scripts/loop.py run "crm software" \
-  --for "a founder deciding whether to build here" --iterations 3
+  --for "a founder deciding whether to build here" --effort normal
 ```
 
 That is the whole interface. The script measures, judges, chases, writes the
@@ -76,6 +76,63 @@ you nothing is not persistence.
 
 Dead ends go in the report. A branch that was chased and went nowhere is a
 real result and an expensive one.
+
+## Effort
+
+One dial, 1 to 5, or the names `glance` `quick` `normal` `deep`
+`exhaustive`. It moves five things that have to move together — how many
+ranking businesses get harvested, how many probes are allowed, how much of
+the corpus is placed on the two axes, how many claims are tested, and the
+ceiling on spend.
+
+```bash
+--effort 1        # or glance
+--effort normal   # the default, same as 3
+--effort 5        # or exhaustive
+```
+
+`--iterations`, `--sites`, `--judge-cap`, `--max-claims`, `--min-bits` and
+`--max-spend` still exist and still win where they are given. Effort only
+fills in what the caller left alone.
+
+**The dial is really the floor on what an answer is worth buying.** A probe
+costs $0.09 and buys some expected reduction in uncertainty about what the
+reader came for, so the only question that matters is *how small an answer
+will you pay $0.09 for* — 0.05 of a bit at effort 1, 0.002 at effort 5.
+Stating it that way retires the one arbitrary constant this loop had:
+nobody has to defend 0.01 any more, because it became the caller's choice,
+in units they can argue with.
+
+**It is a ceiling, not a target.** Effort 5 does not mean eight probes; it
+means up to eight, and the loop still stops the moment nothing on the table
+clears the floor. In the measured ladder below, effort 5 sometimes buys
+*fewer* probes than effort 3, because four harvests had already answered
+what two left open. A market with nothing in it costs the same at every
+setting.
+
+### What it actually buys
+
+Three runs at each level on the same seed, Jev cache off so every run asks
+fresh:
+
+| effort | sites | probes | keywords | coverage | findings | data | jev |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 glance | 1 | 0 | ~95 | 23–29% | 4, 4, 4 | $0.24 | $0.005 |
+| 3 normal | 2 | 1–2 | 434–735 | 42–57% | 3, 4, 6 | $0.48 | $0.025 |
+| 5 exhaustive | 4 | 2–3 | 731–1,027 | 44–64% | 4, 5, 5 | $0.68 | $0.035 |
+
+Read the two right-hand columns against each other. **Effort buys coverage,
+not findings.** The spread in findings *within* one effort level (3 to 6 at
+normal) is as wide as the spread across the whole dial, so two findings
+either way is noise and nobody should pick a setting expecting more of
+them. What moves is the share of the market a finding is about: a
+conclusion drawn over 57% of the searching is worth more than the same
+sentence drawn over 25% of it, and that is what the extra $0.44 buys.
+
+Findings are a count of things that survived testing, and survival is a
+judgment made one claim at a time — near the 0.5 line it goes either way
+between runs. Coverage is arithmetic over the whole corpus, so it is
+stable. That is why the ladder is read on coverage.
 
 ## Who decides what
 
@@ -285,18 +342,18 @@ paid for. Probes are filled to the brim.
 
 | | typical run |
 |---|---|
-| DataForSEO | `--iterations` calls, plus one closing forecast, ~$0.09 each |
-| Jev | $0.01–0.03 — input tokens only, output is free |
-| default `--iterations 3` | **~$0.37 and about 20 seconds** |
+| DataForSEO | one harvest per site plus up to `--iterations` probes, ~$0.09 each, and one closing forecast |
+| Jev | $0.005–0.04 — input tokens only, output is free |
+| default `--effort normal` | **~$0.46 and about 25 seconds** |
 
-`--iterations` defaults to **3**: one call to see the market, one to chase
-what looked odd, one to go elsewhere when that turns out to be a dead end.
-At two there is no backtrack and it degenerates into a pipeline. Past four,
-Google's idea list for any seed runs out and the extra calls buy
-confirmation — the one thing the method is trying not to pay for.
+Judgment is 5% of the bill, which decides an argument that comes up
+repeatedly: given a harvest already bought for $0.09, it is never worth
+saving a cent of Jev by leaving part of it unread. See **Effort** above,
+and `--relevance-cap`.
 
 ```bash
 loop.py run "crm software" --dry-run      # what it would cost, spends nothing
+--effort glance                           # or 1..5, see above
 --max-spend 0.50                          # checked before each call, not after
 --offline                                 # replay cached responses only
 ```
@@ -320,7 +377,12 @@ seasonal artefact wearing a trend's clothes. See `references/graph.md`.
    confidently wrong numbers — "coffee shop" is ~2.7M/mo in the US and
    ~1.3k in Oslo.
 3. **Say who is asking**, in a sentence about the decision they face.
-4. **Read the report, including the rejections.** "Checked, and it did not
+4. **Pick an effort.** `normal` for a market you are weighing up;
+   `glance` when you only want to know whether there is anything here at
+   all; `exhaustive` when the answer is going to be acted on and the
+   difference between 25% and 57% of the searching matters. `--dry-run`
+   prints what any setting would cost before spending a cent.
+5. **Read the report, including the rejections.** "Checked, and it did not
    hold" tells the reader what was looked for and not found, which is often
    more useful than what was.
 

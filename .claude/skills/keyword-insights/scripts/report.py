@@ -228,8 +228,9 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
             f"Google's own forecast for the {fc['keywords']:,} searches here "
             f"worth bidding on — the ones where someone is buying, comparing "
             f"or looking for a supplier nearby, not reading a definition or "
-            f"hunting a job. Bid set at {cur}{fc['bid']:.2f}, the median "
-            f"top-of-page bid already measured on those very keywords, on "
+            f"hunting a job. Bid set at {cur}{fc['bid']:,.0f} — the median "
+            f"top-of-page bid already measured on those very keywords, "
+            f"rounded to the whole unit the forecast endpoint accepts — on "
             f"exact match.")
         L.append("")
         L.append("| | |")
@@ -241,7 +242,7 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
         L.append("")
         if fc.get("bid", 0) > 0 and fc["cpc"] > 0 and fc["cpc"] < fc["bid"]:
             L.append(
-                f"You would bid {cur}{fc['bid']:.2f} and pay "
+                f"You would bid {cur}{fc['bid']:,.0f} and pay "
                 f"{cur}{fc['cpc']:.2f} — {1 - fc['cpc'] / fc['bid']:.0%} under "
                 f"your maximum. That gap is the auction saying how much of "
                 f"your bid it actually needs.")

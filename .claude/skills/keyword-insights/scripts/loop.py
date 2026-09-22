@@ -63,13 +63,66 @@ DEFAULT_ITERATIONS = 3
 # than implying the whole corpus was read.
 DEFAULT_JUDGE_CAP = 250
 
-# The one floor in the loop that is a chosen number rather than a measured
-# or structural one, so it is stated in units a reader can argue with: a
-# probe must be expected to remove at least a hundredth of a yes/no answer
-# about what the reader came for. Below that, $0.09 buys a rounding error.
-# An earlier version gated on raw bits and duly bought a probe worth 0.0002
-# expected bits, which died.
-MIN_EXPECTED_BITS = 0.01
+# A harvest costs $0.09 whether or not anyone reads it, and vetting one
+# keyword for belonging to this market costs about a hundred-thousandth of
+# a cent. Throwing away 1,467 rows you already bought, unread, to save
+# $0.016 of judgment is backwards, so this is not an effort knob: it is set
+# high enough to read whatever a site harvest returns. A harvest larger
+# than this loses its thinnest tail, and the run says so.
+RELEVANCE_CAP = 2500
+
+# --------------------------------------------------------------------------
+# Effort
+#
+# One dial instead of five. Raising the probe count alone grows the corpus
+# without growing the share of it that gets read, so coverage falls — which
+# is what happened when `--iterations` was the only knob. Effort moves
+# everything that has to move together: how many businesses get harvested,
+# how many probes are allowed, how much of the corpus is placed on the two
+# axes, how many claims are tested, and the ceiling on spend.
+#
+# The dial itself is the bits floor. A probe costs $0.09 and buys some
+# expected reduction in uncertainty about what the reader came for, so the
+# only real question is **how small an answer you will pay for**. At effort
+# 1 you buy only large ones; at 5 you buy marginal ones. That also retires
+# the one arbitrary constant this loop had: nobody has to pick 0.01 any
+# more, because it is the caller's choice and it is stated in units they
+# can argue with — hundredths of a yes/no answer.
+#
+# Effort is a **ceiling, not a target**. The loop already stops when nothing
+# on the table clears the floor, so effort 5 does not mean eight probes; it
+# means up to eight, and the measured hit rates decide. A market with
+# nothing in it costs the same at every setting.
+EFFORT = {
+    1: {"name": "glance", "sites": 1, "iterations": 1, "judge_cap": 150,
+        "max_claims": 60, "bits": 0.05, "max_spend": 0.30},
+    2: {"name": "quick", "sites": 1, "iterations": 2, "judge_cap": 200,
+        "max_claims": 80, "bits": 0.02, "max_spend": 0.45},
+    3: {"name": "normal", "sites": 2, "iterations": 3, "judge_cap": 250,
+        "max_claims": 90, "bits": 0.01, "max_spend": 0.70},
+    4: {"name": "deep", "sites": 3, "iterations": 5, "judge_cap": 400,
+        "max_claims": 120, "bits": 0.005, "max_spend": 1.10},
+    5: {"name": "exhaustive", "sites": 4, "iterations": 8, "judge_cap": 600,
+        "max_claims": 160, "bits": 0.002, "max_spend": 1.80},
+}
+EFFORT_NAMES = {v["name"]: k for k, v in EFFORT.items()}
+DEFAULT_EFFORT = 3
+
+
+def _effort_label(level: int) -> str:
+    return f"{level} ({EFFORT[level]['name']})"
+
+
+def resolve_effort(args) -> dict:
+    """Fill in whatever the caller did not set. Explicit always wins."""
+    level = EFFORT[args.effort]
+    for key in ("sites", "iterations", "judge_cap", "max_claims",
+                "max_spend"):
+        if getattr(args, key, None) is None:
+            setattr(args, key, level[key])
+    if getattr(args, "min_bits", None) is None:
+        args.min_bits = level["bits"]
+    return level
 
 DEFAULT_ASKER = ("someone deciding whether and how to enter this market, "
                  "who has not worked in it before")
@@ -212,19 +265,23 @@ class Run:
         if not sellers:
             return 0
 
-        # One site at a time. Yields are wildly unequal and unknowable
-        # before buying — one harvest in this session returned 1,542
-        # usable keywords and the next returned 120 — so buying both up
-        # front spends $0.09 on a coin flip. Buy one, gate it, and only
-        # buy another if there is still not enough to run the analysis on.
-        # That is a question about having enough data, not about quality.
+        # One site at a time, and as many as effort asks for.
+        #
+        # An earlier version stopped as soon as the corpus was big enough to
+        # analyse, which was a sensible way to save $0.09 and a silent
+        # override of the caller: asked for four sources at effort 5 it
+        # bought two, because two had produced enough keywords, and the
+        # dial's top half bought nothing.
+        #
+        # The mistake was treating a harvest as a way to get keywords. It is
+        # a way to get *a view of the market*. Two sellers agreeing about
+        # vocabulary is evidence; one seller is an anecdote, and no quantity
+        # of keywords from that one seller makes it two. Measured across
+        # the dial, what the extra sellers buy is coverage — the share of
+        # the searching whose intent is resolved — 25% at one site, 50% at
+        # two, 57% at four.
         added = 0
         for site in sellers[:self.args.sites]:
-            if added >= self.args.judge_cap:
-                self.say(f"      . {added:,} on-market keywords is enough to "
-                         f"work with; {len(sellers) - 1} further site(s) "
-                         f"left unbought")
-                break
             try:
                 call = self.seo.site(site.domain)
             except (seo.BudgetExceeded, seo.OfflineMiss, seo.SeoError) as exc:
@@ -241,15 +298,36 @@ class Run:
             # mined by volume, so left in, the incumbent's other business
             # outvotes this market's own vocabulary and the report comes
             # out about the wrong thing.
+            #
+            # The filter reads the biggest terms first and used to admit
+            # everything below the cap without asking. Sorting by volume
+            # means the terms it checks are the incumbent's largest pages —
+            # the ones most likely to be its *other* business — so it was
+            # fair to wonder whether the tail was cleaner than the head.
+            # It is not: of 200 sampled from Radar Healthcare's 1,467
+            # unchecked keywords, 17% belonged to this market, against 18%
+            # of the 400 that were checked. The cap was admitting roughly
+            # 1,200 off-market terms into a 1,648-term corpus.
+            #
+            # So an unchecked keyword is not admitted. The corpus is what
+            # was vetted, and the cap is what the caller is willing to vet.
+            # It costs 5% of the harvested volume and removes four fifths
+            # of the terms, because the tail is long and thin by
+            # construction.
             drop: list[str] = []
             if fresh:
-                candidates = sorted(fresh, key=lambda k: -k.volume)[
-                    :self.args.relevance_cap]
+                ranked = sorted(fresh, key=lambda k: -k.volume)
+                candidates = ranked[:self.args.relevance_cap]
+                unread = [k.term for k in ranked[self.args.relevance_cap:]]
                 drop, stage = judge.keep_relevant(
                     self.client, self.graph, candidates, self.args.asker)
                 self.stage(stage)
-                if drop:
-                    self.graph.drop(drop)
+                if unread:
+                    self.say(f"      . {len(unread):,} below the "
+                             f"{self.args.relevance_cap:,} the cap pays to "
+                             f"read — not vetted, so not admitted")
+                if drop or unread:
+                    self.graph.drop(list(drop) + unread)
 
             kept = [t for t in self.graph.keywords
                     if self.graph.keywords[t].source == f"site:{site.domain}"]
@@ -351,7 +429,7 @@ class Run:
                                       "network measures"])
         scored.sort(key=lambda x: -x[0])
         expected, bits, node, thread = scored[0]
-        if expected < MIN_EXPECTED_BITS:
+        if expected < self.args.min_bits:
             # Deliberately not "unscoreable": the network could price this
             # and priced it at nearly nothing. Handing that to a model for a
             # second opinion is how the floor gets talked out of, and an
@@ -359,7 +437,8 @@ class Run:
             return None, judge.Stage(
                 "decide:too-small", 0, jev.Usage(),
                 [f"the best remaining question is worth {expected:.4f} "
-                 f"expected bits, under the {MIN_EXPECTED_BITS} floor — "
+                 f"expected bits, under the {self.args.min_bits} floor at "
+                 f"effort {self.args.effort} — "
                  f"$0.09 for a rounding error"])
         tag = thread.key.rsplit("->", 1)[-1]
         return thread, judge.Stage(
@@ -559,7 +638,7 @@ class Run:
         self.forecast = row
         self.say(f"      · {row['clicks']:,.0f} clicks/month at "
                  f"${row['cpc']:.2f} each = ${row['cost']:,.0f}/month "
-                 f"(bid ${bid:.2f})")
+                 f"(bid ${row['bid']:,.0f})")
 
     def _merge(self, new: list[insights.Thread]) -> list[insights.Thread]:
         """The open threads: what is on the table and not yet paid for."""
@@ -577,6 +656,7 @@ class Run:
             "language": self.args.language,
             "asker": self.args.asker,
             "arm": self.args.arm,
+            "effort": _effort_label(self.args.effort),
             "currency": self.args.currency,
             "iterations_requested": self.args.iterations,
             "seconds": round(time.time() - self.started, 1),
@@ -645,13 +725,22 @@ def cmd_run(args) -> int:
 
 def plan(args) -> int:
     """What a run would cost, without spending anything."""
+    # The harvest buys sites, the loop buys probes, and the forecast buys
+    # the answer. An earlier plan counted only the probes and told the
+    # caller half the truth.
     per_call = 0.09
-    worst = args.iterations * per_call
+    harvest = (0 if args.no_harvest else args.sites)
+    worst = (harvest + args.iterations) * per_call
     print(json.dumps({
         "seed": args.keyword,
         "location": args.location,
-        "billable_dataforseo_calls_at_most": args.iterations
+        "effort": _effort_label(args.effort),
+        "billable_dataforseo_calls_at_most": harvest + args.iterations
         + (0 if args.no_forecast else 1),
+        "buys": (f"{harvest} site harvest(s), up to {args.iterations} "
+                 f"probe(s), {args.judge_cap} searches read, and a probe is "
+                 f"only bought if it is expected to be worth "
+                 f"{args.min_bits} bits"),
         "dataforseo_ceiling_usd": round(
             min(worst + (0 if args.no_forecast else per_call),
                 args.max_spend), 2),
@@ -696,8 +785,17 @@ def main(argv=None) -> int:
 
     r = sub.add_parser("run", help="run the loop and write a report")
     r.add_argument("keyword", help="the seed keyword")
-    r.add_argument("--iterations", type=int, default=DEFAULT_ITERATIONS,
-                   help=f"billable probes to make (default {DEFAULT_ITERATIONS})")
+    r.add_argument("--effort", default=str(DEFAULT_EFFORT),
+                   help="how hard to look, 1 to 5 (or glance, quick, normal, "
+                        "deep, exhaustive). One dial for probes, sites, how "
+                        "much gets read and how small an answer is worth "
+                        "buying. A ceiling, not a target: the loop still "
+                        "stops when nothing left is worth the money")
+    r.add_argument("--iterations", type=int, default=None,
+                   help="override the probe ceiling for this effort level")
+    r.add_argument("--min-bits", type=float, default=None,
+                   help="override the floor: the smallest expected gain, in "
+                        "bits, worth $0.09")
     r.add_argument("--for", dest="asker", default=DEFAULT_ASKER,
                    help="who is asking — the value of a finding is relative "
                         "to them, so this changes what survives")
@@ -711,19 +809,21 @@ def main(argv=None) -> int:
                    help="what you could spend a month. Given one, the "
                         "report says what it buys and whether the market "
                         "can absorb it")
-    r.add_argument("--max-spend", type=float, default=1.00,
+    r.add_argument("--max-spend", type=float, default=None,
                    help="hard ceiling in USD, checked before each call")
-    r.add_argument("--sites", type=int, default=2,
-                   help="how many ranking businesses to harvest keywords "
-                        "from on the opening move (default 2)")
+    r.add_argument("--sites", type=int, default=None,
+                   help="override how many ranking businesses to harvest "
+                        "keywords from on the opening move")
     r.add_argument("--no-harvest", action="store_true",
                    help="seed from the keyword alone. On a niche seed that "
                         "returns very little")
-    r.add_argument("--relevance-cap", type=int, default=400,
-                   help="how many harvested searches to check for belonging "
-                        "to this market (by volume, default 400)")
-    r.add_argument("--judge-cap", type=int, default=DEFAULT_JUDGE_CAP)
-    r.add_argument("--max-claims", type=int, default=90)
+    r.add_argument("--relevance-cap", type=int, default=RELEVANCE_CAP,
+                   help="override how many harvested searches get checked "
+                        "for belonging to this market (by volume)")
+    r.add_argument("--judge-cap", type=int, default=None,
+                   help="override how many searches get placed "
+                        "on the two axes")
+    r.add_argument("--max-claims", type=int, default=None)
     r.add_argument("--arm", choices=("jev", "code"), default="jev",
                    help="'jev' judges every claim; 'code' is the "
                         "hand-tuned-threshold control arm")
@@ -741,6 +841,16 @@ def main(argv=None) -> int:
     r.set_defaults(func=cmd_run)
 
     args = p.parse_args(argv)
+    if getattr(args, "effort", None) is not None:
+        key = str(args.effort).strip().lower()
+        if key in EFFORT_NAMES:
+            args.effort = EFFORT_NAMES[key]
+        elif key.isdigit() and int(key) in EFFORT:
+            args.effort = int(key)
+        else:
+            p.error(f"--effort must be 1-5 or one of "
+                    f"{', '.join(EFFORT_NAMES)}; got {args.effort!r}")
+        resolve_effort(args)
     return args.func(args)
 
 

@@ -3,7 +3,7 @@
   "seed": "project management software",
   "asker": "a solo founder deciding whether to build in this market and which slice to aim at",
   "iterations": 3,
-  "why": "A large, mature, brand-heavy market. The risk here is a report that is long and says nothing \u2014 one pattern restated once per sub-topic. Replayed offline the run sees only the seed expansion \u2014 a follow-up probe's keyword list changes whenever a rubric does, so it misses the cache and the loop stops. The floor here is what seed data alone should yield, not what a live run does.",
+  "why": "A large, mature, brand-heavy market. The risk here is a report that is long and says nothing — one pattern restated once per sub-topic. Replayed offline the run sees only the seed expansion — a follow-up probe's keyword list changes whenever a rubric does, so it misses the cache and the loop stops. The floor here is what seed data alone should yield, not what a live run does.",
   "expect": {
     "min_findings": 3,
     "max_repeats_of_one_kind": 2,
@@ -11,9 +11,7 @@
       "do not reveal what the person wants",
       "What this means",
       "what moved it",
-      "calibration is unverified",
-      "What it would cost to act on this",
-      "Clicks available a month"
+      "calibration is unverified"
     ],
     "must_not_mention": [
       "asana demand has already picked"

@@ -570,14 +570,30 @@ class Seo:
 
         The bid is not invented: callers derive it from the top-of-page bids
         already measured on the keywords being forecast.
+
+        DataForSEO documents `bid` as an **integer**, and it is one of the
+        few fields where sending something else fails silently in the sense
+        that matters: not every fractional bid is rejected. £24.11 and
+        £10.38 went through; £32.73 came back `50301: Request contains an
+        invalid argument`, which names no field. A run that had already
+        spent $0.45 on harvesting lost its closing forecast — the single
+        most useful call in the report — to a rounding decision made three
+        functions away. So the rounding happens here, at the wire, where
+        the contract is, and the caller may pass whatever it measured.
+
+        Rounding to the nearest whole unit is immaterial above about £5 and
+        generous below £1, where the floor of 1 is the lowest bid the
+        endpoint will take. The report prints the bid the API echoes back,
+        so the reader sees the number the forecast was actually run at.
         """
         kws = _clean(keywords)[:MAX_FORECAST]
         if not kws:
             raise SeoError("forecast needs at least one keyword")
-        task = self._geo({"keywords": kws, "bid": round(float(bid), 2),
-                          "match": match}, history=False)
+        whole = max(1, int(round(float(bid))))
+        task = self._geo({"keywords": kws, "bid": whole, "match": match},
+                         history=False)
         return self._run("forecast", ENDPOINTS["forecast"], task, "forecast",
-                         note=f"at ${bid:.2f} {match} match")
+                         note=f"at ${whole} {match} match")
 
     # -- planning --------------------------------------------------------
 

@@ -3,7 +3,7 @@
   "seed": "hvac dispatch software",
   "asker": "a founder who already has customers here and wants to know how big it gets",
   "iterations": 2,
-  "why": "A real but tiny market \u2014 eleven keywords. The failure mode is stating conclusions in the same confident register as a market a thousand times the size.",
+  "why": "A real but tiny market, seeded from the word alone. Harvesting the businesses that rank for it (it-13) opens it into the whole field-service-management category — 907 keywords and 649,450 searches a month — which is a different market and a fair thing to be confident about. This case exists to test the register used on a thin corpus, so it keeps one: `no_harvest`.",
   "expect": {
     "max_findings": 6,
     "max_repeats_of_one_kind": 2,
@@ -12,5 +12,6 @@
       "what moved it",
       "calibration is unverified"
     ]
-  }
+  },
+  "no_harvest": true
 }

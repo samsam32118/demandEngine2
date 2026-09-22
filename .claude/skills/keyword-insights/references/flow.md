@@ -37,7 +37,7 @@ flowchart TB
   end
 
   SITE --> QREL{{"is this search in this market at all?<br/>a business is wider than its market"}}:::jev
-  QREL -->|"no"| DROPPED["discarded before it can<br/>outvote the market's own words"]:::code
+  QREL -->|"no, or never asked"| DROPPED["discarded before it can<br/>outvote the market's own words<br/>an unvetted row is not evidence"]:::code
   QREL -->|"yes"| ROWS
   EXPAND --> ROWS
   PRICEP --> ROWS
@@ -77,7 +77,7 @@ flowchart TB
 
   KEPT --> FOLLOW["follow-up table:<br/>the question each kind of finding raises"]:::code
   FOLLOW --> EIG
-  EIG -->|"best question worth > 0 bits"| PRICEP
+  EIG -->|"best question clears<br/>the effort floor, in bits"| PRICEP
   EIG -->|"nothing left worth buying"| FCAST
   PRICEP -.-> QASSESS{{"does what came back<br/>bear on the question asked?"}}:::jev
   QASSESS -->|"yes — go deeper"| GRAPH
@@ -116,7 +116,7 @@ stateDiagram-v2
     INFER: INFER
     INFER: tables cached — re-inference is free
     DECIDE: DECIDE
-    DECIDE: expected entropy reduction, in bits
+    DECIDE: expected entropy reduction, in bits, against the effort floor
     ACT: ACT
     ACT: buy one answer
     ASSESS: ASSESS
@@ -130,7 +130,7 @@ stateDiagram-v2
     OBSERVE --> ORIENT
     ORIENT --> INFER
     INFER --> DECIDE
-    DECIDE --> ACT: a question worth > 0 bits
+    DECIDE --> ACT: a question that clears the effort floor
     DECIDE --> PRICE: nothing left worth buying
     ACT --> ASSESS
     ASSESS --> ORIENT: paid off, go deeper
