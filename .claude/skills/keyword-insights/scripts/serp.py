@@ -45,6 +45,10 @@ from typing import Sequence
 BASE = "https://api.brightdata.com/request"
 DEFAULT_ZONE = "serp_api1"
 TOKEN_ENV = "BRIGHTDATA_API_TOKEN"
+
+# A Google results page is tens of kilobytes. Anything under this is the
+# vendor having failed with a 200, not a page with no results on it.
+MIN_BODY = 500
 ZONE_ENV = "BRIGHTDATA_SERP_ZONE"
 
 # Hosts that rank for commercial terms without selling anything. Excluded
@@ -176,7 +180,8 @@ class Serp:
             return None
         try:
             with open(path, encoding="utf-8") as fh:
-                return json.load(fh).get("markdown")
+                body = json.load(fh).get("markdown")
+            return body if body and len(body) >= MIN_BODY else None
         except (OSError, ValueError):
             return None
 
@@ -225,6 +230,18 @@ class Serp:
                         context=ssl.create_default_context()) as response:
                     markdown = response.read().decode("utf-8", "replace")
                 self.calls += 1
+                # An empty body is a failure the vendor returns with a 200.
+                # Caching it turns one bad response into a permanent one:
+                # `keyword research tool` returned nothing, was cached, and
+                # every retry replayed the emptiness rather than asking
+                # again. Only a page with something on it is worth keeping.
+                if len(markdown) < MIN_BODY:
+                    last = f"empty body ({len(markdown)} bytes)"
+                    if attempt == 4:
+                        raise SerpError(last) from None
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
                 self._write(key, markdown)
                 return parse_markdown(markdown, limit=limit)
             except urllib.error.HTTPError as exc:
