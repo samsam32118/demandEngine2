@@ -690,3 +690,67 @@ about having enough data, not about quality, so code settles it.
 It is the one call that answers what the reader came with, and it runs last.
 Its $0.09 is now held back from the probe budget so a run cannot spend
 everything on questions and then be unable to afford the answer.
+
+---
+
+## it-15 — checking the bill against the vendor's rate card
+
+Every cost in this ledger came from the `cost` field DataForSEO returns, and
+the flat $0.09 came from the sibling skill's documentation. Neither had been
+checked against what the vendor actually publishes.
+
+**Confirmed, two ways.** All 91 cached calls across four endpoints, with row
+counts from 1 to 24,028, billed exactly $0.09 — and the rate card the API
+serves at `/v3/appendix/user_data` gives `cost_type: per_request, cost:
+0.09` for every Google Ads endpoint, at every priority. There is no cheaper
+queue mode: only `live` is listed for them.
+
+**But there are two billing models, and we were on the wrong one for a
+quarter of our calls.** DataForSEO Labs charges `$0.012 per request +
+$0.00012 per row`. The two cross at **650 rows**.
+
+| our call | calls | median rows | flat | per-row | right endpoint |
+|---|---:|---:|---:|---:|---|
+| `for-keywords` | 40 | 513 | $3.60 | $7.52 | flat — already right |
+| `for-site` | 8 | 1,071 | $0.72 | $0.96 | flat — already right |
+| **`search_volume`** | 27 | 134 | **$2.43** | **$1.35** | **per-row** |
+| `ad_traffic` | 16 | 1 | $1.44 | — | no alternative exists |
+
+The rule that falls out is about the request, not a preference: **pay per
+row when the size is bounded, pay flat when it is not.** An expansion can
+return anything — one in this session returned 24,028 rows, which would be
+$2.90 per-row — so the flat rate is insurance. Pricing a list cannot return
+more rows than it was given, so its cost is bounded and per-row wins.
+
+### The trade, stated
+
+Head to head on the same 600 keywords:
+
+| | cost | keywords with volume |
+|---|---:|---:|
+| Google Ads | $0.090 | 125 |
+| per-row | **$0.025** | 103 (82%) |
+
+Volumes agree on 94% of what both hold. The 18% missed are real, including
+`template project planning` at 12,100 a month, because the per-row endpoint
+answers only for keywords in its own database — while the flat one returns a
+row for every keyword sent and bills the same whether it carries anything.
+**Across all our calls, 71% of the rows the flat endpoint returned carried
+no volume at all.**
+
+Cost per keyword actually found decides it: **$0.00072 against $0.00024**,
+three times cheaper. And the loss falls on the least critical call, since a
+price probe tests a direction while the corpus comes from the site harvest,
+which stays on the flat rate.
+
+It also returns **94 months of history rather than 48**, which is a free
+upgrade to every trend figure.
+
+### Where a run's money goes now
+
+| | before it-14 | now |
+|---|---:|---:|
+| opening | 1 expansion, $0.09 | 1–2 harvests, $0.09–0.18 |
+| probes | 2 × $0.09 | 1–2 × ~$0.02 |
+| forecast | $0.09 | $0.09 |
+| **typical run** | **$0.45** | **$0.22–0.31** |

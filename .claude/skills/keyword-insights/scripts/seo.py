@@ -38,7 +38,11 @@ MAX_ATTEMPTS = 5
 
 # Hard limits imposed by the Google Ads API behind DataForSEO.
 MAX_SEEDS = 20          # keywords_for_keywords
-MAX_PRICED = 1000       # search_volume
+# Pricing a list is billed per row returned, and a probe of synthesised
+# guesses is mostly misses by design — 200 sent, 19 back. Capped at 700 so
+# the worst case (every guess lands) is $0.096, level with the flat rate,
+# while the typical case is about $0.02.
+MAX_PRICED = 700
 MAX_FORECAST = 1000     # ad_traffic_by_keywords
 
 CRED_ENV = ("DATA_FOR_SEO_LOGIN", "DATA_FOR_SEO_PASSWORD")
@@ -68,6 +72,20 @@ ENDPOINTS = {
     "price": "keywords_data/google_ads/search_volume/live",
     "site": "keywords_data/google_ads/keywords_for_site/live",
     "forecast": "keywords_data/google_ads/ad_traffic_by_keywords/live",
+    # Same figures, different billing. DataForSEO charges a flat $0.09 for
+    # the Google Ads endpoints whatever comes back, and $0.012 + $0.00012 a
+    # row for this one — so they cross at 650 rows.
+    #
+    # That makes the right endpoint a property of the request, not a
+    # preference. An expansion or a site harvest can return anything (one
+    # expansion in this session returned 24,028 rows, which would be $2.90
+    # per-row), so the flat rate is insurance and they stay on Google Ads.
+    # Pricing a list cannot return more rows than it was given, so its cost
+    # is bounded and per-row billing wins: 27 such calls in this session
+    # cost $2.43 flat and would have cost $1.35.
+    #
+    # Pay per row when the size is bounded; pay flat when it is not.
+    "price_labs": "dataforseo_labs/google/keyword_overview/live",
 }
 
 # Exact match, because it is the only honest default. Broad match forecasts
@@ -257,6 +275,33 @@ def normalise_forecast(result: list[dict] | None) -> list[dict]:
     return []
 
 
+def normalise_labs(result: list[dict] | None, source: str) -> list[dict]:
+    """Flatten the per-row endpoint's shape onto the one the graph expects."""
+    rows = []
+    for block in result or []:
+        for item in (block.get("items") or []):
+            term = (item.get("keyword") or "").strip().lower()
+            info = item.get("keyword_info") or {}
+            if not term or info.get("search_volume") is None:
+                continue
+            trend, months = _trend(info.get("monthly_searches"))
+            competition = info.get("competition")
+            rows.append({
+                "term": term,
+                "volume": int(info.get("search_volume") or 0),
+                "cpc": float(info.get("cpc") or 0.0),
+                # Given 0..1 here and 0..100 by Google Ads. One scale.
+                "competition_index": (None if competition is None
+                                      else int(round(float(competition) * 100))),
+                "low_bid": float(info.get("low_top_of_page_bid") or 0.0),
+                "high_bid": float(info.get("high_top_of_page_bid") or 0.0),
+                "trend": trend,
+                "months": months,
+                "source": source,
+            })
+    return rows
+
+
 def normalise(result: list[dict] | None, source: str) -> list[dict]:
     rows = []
     for r in result or []:
@@ -410,8 +455,12 @@ class Seo:
         key = self._key(endpoint, task)
         started = time.time()
         cached = self._cached(key)
-        shape = normalise_forecast if action == "forecast" else (
-            lambda r: normalise(r, source))
+        if action == "forecast":
+            shape = normalise_forecast
+        elif endpoint == ENDPOINTS["price_labs"]:
+            shape = lambda r: normalise_labs(r, source)
+        else:
+            shape = lambda r: normalise(r, source)
         if cached is not None:
             result, billed = self._unwrap(cached)
             call = Call(action, endpoint, task, shape(result),
@@ -455,6 +504,40 @@ class Seo:
         return self._run("expand", ENDPOINTS["expand"], task, "expanded")
 
     def price(self, keywords: Sequence[str]) -> Call:
+        """Price a list of exact terms, on whichever endpoint is cheaper.
+
+        Rows cannot exceed the keywords sent, so the per-row endpoint is
+        bounded and almost always cheaper here — a probe of 200 guesses
+        that lands 19 costs $0.014 against a flat $0.09. It also returns 94
+        months of history rather than 48.
+
+        It is not a free win, and the trade is worth stating. Run head to
+        head on the same 600 keywords:
+
+            Google Ads   $0.090   125 keywords with volume
+            per-row      $0.025   103 keywords with volume (82%)
+
+        Volumes agree on 94% of the keywords both hold. The 18% it misses
+        are real — `template project planning` at 12,100 a month among them
+        — because it answers only for keywords in its own database, while
+        the Google Ads endpoint returns a row for every keyword sent and
+        bills the same whether that row carries anything (71% of its rows
+        carry no volume at all).
+
+        The deciding number is cost per keyword actually found: $0.00072
+        against $0.00024, three times cheaper. And the loss falls on the
+        least critical call — a price probe tests a hypothesis about a
+        direction, while the corpus itself comes from the site harvest,
+        which stays on the flat rate. `price_google_ads` is kept for when
+        completeness matters more than cost.
+        """
+        kws = _clean(keywords)[:MAX_PRICED]
+        if not kws:
+            raise SeoError("price needs at least one keyword")
+        task = self._geo({"keywords": kws}, history=False)
+        return self._run("price", ENDPOINTS["price_labs"], task, "priced")
+
+    def price_google_ads(self, keywords: Sequence[str]) -> Call:
         """Price up to 1000 exact terms in one billable call.
 
         This is the cheapest hypothesis test available: 1000 guesses about
