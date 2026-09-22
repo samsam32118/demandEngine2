@@ -309,14 +309,19 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
     if rows:
         L.append("## The shape of the market")
         L.append("")
+        # "mostly trying to" is one label and hides the number that
+        # matters: `seo tools` reads "doing it themselves" and is 37%
+        # people comparing or buying; `keywords` reads "trying to
+        # understand it" and is 2%. Same set of jobs the forecast bids on.
         L.append("| what people search about | searches/mo | click price | "
-                 "names a brand | mostly trying to |")
-        L.append("|---|---:|---:|---:|---|")
+                 "names a brand | buying or comparing | mostly trying to |")
+        L.append("|---|---:|---:|---:|---:|---|")
         for r in rows[:14]:
             top_job = next(iter(r["job_mix"]), "")
             L.append(
                 f"| {r['topic']} | {n(r['volume'])} | "
                 f"{usd(r['click_price'])} | {pct(r['branded_share'])} | "
+                f"{pct(r.get('commercial_share', 0.0))} | "
                 f"{K.JOB_LABELS.get(top_job, top_job)} |")
         L.append("")
 
@@ -405,6 +410,30 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
              f"average, not a forecast; click prices are what advertisers "
              f"have been paying, which is evidence that money moves — not a "
              f"quote.")
+    L.append("")
+    erratic = [r["topic"] for r in rows
+               if r.get("growth") is not None
+               and not r.get("growth_readable")]
+    if erratic:
+        named = ", ".join(f"\u201c{t}\u201d" for t in erratic[:5])
+        L.append(
+            f"**{len(erratic)} topic{'s were' if len(erratic) != 1 else ' was'} "
+            f"left out of every statement about direction** — {named}"
+            + (" and others" if len(erratic) > 5 else "")
+            + ". Google's monthly figures for them swing so widely inside "
+            "the two years compared that the total of each year and the "
+            "median month of each year disagree about which way it went. A "
+            "series that disagrees with itself is not quoted at either "
+            "figure.")
+        L.append("")
+    L.append(
+        "**A topic is what this run made of it.** Topics are clusters mined "
+        "from the keywords this run happened to harvest, so the same label "
+        "can cover a different set of searches in another run, and its "
+        "brand share and click price move with that membership. The "
+        "keyword series underneath are fixed properties of each term and "
+        "agree across runs exactly; a topic's percentages are a reading of "
+        "this corpus, not of the phrase.")
     L.append("")
     L.append(
         f"**On the currency.** DataForSEO returns click prices as bare "

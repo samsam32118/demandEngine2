@@ -100,6 +100,7 @@ CODE_ARM = {
     "branded_share_low": 0.20,
     "growth_up": 1.30,
     "growth_down": 0.77,
+    "commercial_share_low": 0.10,
     "seasonality": 2.00,
     "self_serve_share": 0.25,
     "job_dominance": 0.45,
@@ -229,8 +230,16 @@ def generate(graph: K.Graph) -> list[Claim]:
     # cancels and what is left is the change in level. This is only
     # available because every call asks DataForSEO for four years of
     # history, which it gives away at the same price as one.
+    # Only series that can carry a direction. A topic whose ratio of sums
+    # and ratio of medians disagree about which way the year went is named
+    # in the evidence as unreadable — not quoted as an exception at either
+    # figure. `seo tips` at "23.01x" was one of those.
+    unreadable = [t for t in ranked
+                  if rows.get(t, {}).get("growth") is not None
+                  and not rows[t].get("growth_readable")]
     trended = [(t, rows[t]["growth"]) for t in ranked
-               if rows.get(t, {}).get("growth") is not None]
+               if rows.get(t, {}).get("growth") is not None
+               and rows[t].get("growth_readable")]
     if trended:
         # The median month of each topic, added up across topics — the same
         # defence `K.growth` makes one level down. Summing months here
@@ -268,7 +277,8 @@ def generate(graph: K.Graph) -> list[Claim]:
              "topics_measured": len(trended),
              "years_of_history": years,
              "rising": [f"{t} {g:.2f}x" for t, g in rising[:5]],
-             "falling": [f"{t} {g:.2f}x" for t, g in falling[:5]]},
+             "falling": [f"{t} {g:.2f}x" for t, g in falling[:5]],
+             "too_erratic_to_read": unreadable[:8]},
             top_examples, ranked[0], "direction")
 
     # ---- what sets the price of a click: the topic, or the intention? ---
@@ -404,17 +414,63 @@ def generate(graph: K.Graph) -> list[Claim]:
                                    "searches": least[2]},
                  "brands_found": all_brands[:10]},
                 _examples(by_topic[least[0]]), least[0], "settled")
+        # Unbranded is not the same as open. On answerthepublic.com the
+        # least branded topic was "keywords" — 267,160 searches a month,
+        # nobody's name on it — and 2% of those searches were anyone buying
+        # or comparing; the rest were people learning what a keyword is.
+        # "The open ground is keywords" was the lead finding and it was
+        # backwards. So the share that is there to buy goes into the
+        # sentence, the rival account is the one that actually competes
+        # with it, and the mirror-image claim is built beside it so that
+        # the account test decides which reading the data supports.
+        com = rows.get(least[0], {}).get("commercial_share", 0.0)
+        # Evidence about the subject, not the market. "Name no company at
+        # all" judged next to the market's own brand list — asana, jira,
+        # smartsheet — read as contradicted by it: measured fresh on
+        # `pmo software` (unbranded 1.0, commercial 1.0), fair-reading
+        # went 0.31-0.37 with the market list to 0.45-0.46 without. Not
+        # enough on its own to clear 0.5 there, and still the right
+        # evidence to show.
+        own_brands = sorted({e for k in by_topic[least[0]] for e in k.entities})
         add("market|open",
             f"The open ground is \u201c{least[0]}\u201d: "
             f"{pct(1 - least[1])} of its {n(least[2])} monthly searches name "
-            f"no company at all.",
+            f"no company at all, and {pct(com)} of them are buying, "
+            f"comparing or looking for a supplier.",
             f"There is a part of this market — \u201c{least[0]}\u201d — "
-            f"where buyers have no supplier in mind when they search.",
-            f"Every part of this market already has suppliers that buyers "
-            f"name for themselves.",
+            f"where buyers have no supplier in mind when they search, and "
+            f"a real share of them are there to buy.",
+            f"The part of this market with the fewest company names — "
+            f"\u201c{least[0]}\u201d — has almost nobody in it looking to "
+            f"buy: there is no one there to sell to.",
             {"topic": least[0], "unbranded_share": round(1 - least[1], 3),
-             "searches": least[2], "brands_found": all_brands[:10]},
+             "commercial_share": round(com, 3),
+             "searches": least[2], "brands_in_topic": own_brands[:10]},
             _examples(by_topic[least[0]]), least[0], "open")
+        # The assertion states the conjunction and nothing more. A first
+        # draft said "unbranded *because* there is nothing to sell there",
+        # and fair-reading killed it on every corpus (0.17-0.48) while the
+        # account test was picking its side — correctly: a mechanism is
+        # not a measurement, and the test does not care whose sentence it
+        # is.
+        add("market|empty",
+            f"\u201c{least[0]}\u201d is unclaimed, and there is almost "
+            f"nobody there to sell to: {pct(1 - least[1])} of its "
+            f"{n(least[2])} monthly searches name no company, and "
+            f"{'only ' if com > 0 else ''}{pct(com)} of them are buying or "
+            f"comparing — the rest are reading.",
+            f"The part of this market with the fewest company names in its "
+            f"searches — \u201c{least[0]}\u201d — is also where the fewest "
+            f"people are looking to buy: it is unclaimed, and almost nobody "
+            f"searching it is shopping.",
+            f"The part of this market with the fewest company names — "
+            f"\u201c{least[0]}\u201d — is open ground: the people "
+            f"searching it are shopping and simply have no supplier in "
+            f"mind yet.",
+            {"topic": least[0], "unbranded_share": round(1 - least[1], 3),
+             "commercial_share": round(com, 3),
+             "searches": least[2], "brands_in_topic": own_brands[:10]},
+            _examples(by_topic[least[0]]), least[0], "empty")
 
     # ---- is the money where the attention is? ---------------------------
     everything = [k for k in graph.certain if k.volume > 0]
@@ -609,6 +665,10 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
                     <= C["branded_share_low"])
         elif kind == "open":
             keep = ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
+        elif kind == "empty":
+            keep = (ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
+                    and ev.get("commercial_share", 1.0)
+                    <= C["commercial_share_low"])
         elif kind == "direction":
             g = ev.get("last_twelve_months_over_the_twelve_before") or 1.0
             keep = g >= C["growth_up"] or g <= C["growth_down"]

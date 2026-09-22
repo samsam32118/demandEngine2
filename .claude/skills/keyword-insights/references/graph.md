@@ -54,11 +54,11 @@ which topics break the pattern.
 | family | reads | the question it settles |
 |---|---|---|
 | `thin` | corpus size, top-5 concentration | is there enough spread here to tell buyers apart at all? |
-| `direction` | last twelve months against the twelve before | is this growing or shrinking, and what runs the other way? |
+| `direction` | median month of the last twelve against the twelve before, over topics whose series can carry a direction | is this growing or shrinking, and what runs the other way? Topics whose sum-ratio and median-ratio disagree on the sign are named as unreadable, not quoted |
 | `pricing_axis` | click-price spread across jobs vs across topics | is a click priced by what someone wants, or by where they are? |
 | `intent` | volume by job, and the topic furthest from the market's mix | what is everyone doing here, and who is doing something else? |
 | `ambiguity` | share of volume whose intent was indistinguishable | how much of this market's searching tells you nothing? |
-| `settled` / `open` | branded share, most vs least | where have buyers picked a supplier, and where have they not? |
+| `settled` / `open` / `empty` | branded share, most vs least, and the share of the least-branded topic that is buying or comparing | where have buyers picked a supplier, and where have they not — and is the unclaimed part unclaimed because it is open, or because there is nothing to sell there? `open` and `empty` are built as a contradicting pair from the same numbers, so the account test decides |
 | `split` | biggest term vs dearest click | is the money where the attention is? |
 | `head` | largest keyword and its job | what is the single biggest thing happening here? |
 | `money_seat` | implied spend by cell vs its share of searching | where is spend concentrated out of proportion? |

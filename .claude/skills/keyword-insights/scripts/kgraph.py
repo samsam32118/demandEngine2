@@ -75,6 +75,12 @@ JOB_LABELS: dict[str, str] = {
     "brand_desk": "going to one company's own front door",
 }
 
+# The jobs that make a search worth bidding on: someone buying, comparing,
+# or looking for a supplier nearby. The closing forecast is priced on
+# exactly this set, and the "buying or comparing" share in every topic row
+# is the same set, so a reader can put the two side by side.
+BIDDABLE = ("buy", "compare", "local")
+
 MONTHS = ("January", "February", "March", "April", "May", "June", "July",
           "August", "September", "October", "November", "December")
 
@@ -244,17 +250,29 @@ def growth(trend: Sequence[int]) -> float | None:
     return recent / prior
 
 
-def long_growth(trend: Sequence[int]) -> float | None:
-    """The latest year against the earliest one in the window.
+def growth_readable(trend: Sequence[int]) -> bool | None:
+    """Can this series carry a statement about direction at all?
 
-    Median months, for the reason given in `growth`.
+    A median survives a spike; nothing survives a series that swings 450x
+    inside the two years being compared. `keyword research` reads 0.29x by
+    the sum of each window and 3.42x by the median, and a series about
+    which two reasonable estimators disagree on the *sign* of the change is
+    one the data cannot speak for, whichever figure gets quoted.
+
+    That is the test, and there is no threshold in it: readable means the
+    ratio of sums and the ratio of medians fall on the same side of 1.0.
+    Nobody has to defend "3x is too erratic" — the series is asked whether
+    it agrees with itself. `None` where there is no growth figure at all.
     """
     if len(trend) < 24:
         return None
-    first = statistics.median(trend[:12])
-    if first <= 0:
+    prior_sum = sum(trend[-24:-12])
+    prior_med = statistics.median(trend[-24:-12])
+    if prior_sum <= 0 or prior_med <= 0:
         return None
-    return statistics.median(trend[-12:]) / first
+    by_sum = sum(trend[-12:]) / prior_sum
+    by_med = statistics.median(trend[-12:]) / prior_med
+    return (by_sum >= 1.0) == (by_med >= 1.0)
 
 
 def years_of_history(trend: Sequence[int]) -> int:
@@ -709,8 +727,10 @@ class Graph:
                     list(job_vol.values())), 3),
                 "growth": (round(growth(trend), 3)
                            if growth(trend) is not None else None),
-                "long_growth": (round(long_growth(trend), 3)
-                                if long_growth(trend) is not None else None),
+                "growth_readable": growth_readable(trend),
+                "commercial_share": round(share(
+                    sum(v for j, v in job_vol.items() if j in BIDDABLE),
+                    vol), 3),
                 "years_of_history": years_of_history(trend),
                 "seasonality": (round(seasonality(trend, tmonths), 2)
                                 if seasonality(trend, tmonths) is not None
@@ -762,7 +782,9 @@ class Graph:
             "brands": self.confirmed_entities[:8],
             "self_serve_share": share(ss, clear),
             "unclear_share": share(vol - self.certain_volume, vol),
-            "growth": growth(trend),
+            # A direction the market's own series cannot carry is not
+            # evidence. The node goes unobserved rather than misinformed.
+            "growth": growth(trend) if growth_readable(trend) else None,
             "topics": len(rows) or None,
             "top5_share": share(sum(k.volume for k in top5), vol),
             "gradient": round(best_lift, 2) if best_lift > 0 else None,

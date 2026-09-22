@@ -658,7 +658,7 @@ class Run:
     # someone reading a definition or hunting a job is not a click worth
     # buying, and including them would forecast a market that does not
     # exist.
-    BIDDABLE = ("buy", "compare", "local")
+    BIDDABLE = K.BIDDABLE  # one definition, shared with the topic rows
 
     def price_the_move(self) -> None:
         """One call that turns the whole report into a decision.

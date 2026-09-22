@@ -64,6 +64,35 @@ def fixture() -> K.Graph:
     return g
 
 
+def trended_fixture() -> K.Graph:
+    """Two topics with four years of history: one that reads, one that
+    cannot. `keyword research` is the series as DataForSEO returns it."""
+    g = K.Graph("seo tools", "United States", "en")
+    steady = [40000 - 700 * i for i in range(48)]
+    spiked = ([8100] * 24
+              + [6600, 9900, 8100, 14800, 9900, 8100,
+                 9900, 12100, 12100, 301000, 1500000, 1830000]
+              + [74000, 8100, 2400, 1000, 2400, 3600,
+                 14800, 60500, 450000, 201000, 135000, 135000])
+    months = [f"{y}-{m:02d}" for y in (2022, 2023, 2024, 2025)
+              for m in range(1, 13)]
+    g.add_rows([
+        {"term": "rank tracker", "volume": 14800, "cpc": 30.0,
+         "competition_index": 50, "low_bid": 10.0, "high_bid": 60.0,
+         "trend": steady, "months": months, "source": "expanded"},
+        {"term": "keyword research", "volume": 90500, "cpc": 14.7,
+         "competition_index": 30, "low_bid": 5.0, "high_bid": 30.0,
+         "trend": spiked, "months": months, "source": "expanded"},
+    ])
+    for t in ("rank tracker", "keyword research"):
+        g.add_topic(t, confirmed=True)
+    for kw in g.keywords.values():
+        kw.topic, kw.topic_confidence = kw.term, 1.0
+        kw.job = "compare" if kw.term == "rank tracker" else "learn"
+        kw.job_confidence, kw.job_certain = 0.9, True
+    return g
+
+
 def offline() -> None:
     print("arithmetic")
     check("median", K.median([1, 2, 3, 4]) == 2.5)
@@ -86,6 +115,12 @@ def offline() -> None:
           K.growth(spiked) > 1.0)
     check("a spiked window is read by its median month",
           abs(K.growth(spiked) - (37650.0 / 11000.0)) < 1e-6)
+    check("a series whose sum and median disagree on direction is unreadable",
+          K.growth_readable(spiked) is False)
+    check("a series that agrees with itself is readable",
+          K.growth_readable([40000 - 700 * i for i in range(48)]) is True)
+    check("no history, no readability verdict",
+          K.growth_readable([10] * 12) is None)
     # Four years is what `date_from` actually returns, and four
     # observations per calendar month is what makes the median bite: with
     # only two years the median of two values is their mean and a single
@@ -362,6 +397,59 @@ def offline() -> None:
     check("readings are produced for measurements that exist",
           set(MN.readings({"click_price": 1.0, "growth": 1.1}))
           == {"o_money", "o_up"})
+
+    print("erratic series")
+    tg = trended_fixture()
+    tclaims = insights.generate(tg)
+    direction = next((c for c in tclaims if c.kind == "direction"), None)
+    check("a direction finding is still made from the readable topic",
+          direction is not None)
+    named = (direction.evidence.get("rising", [])
+             + direction.evidence.get("falling", [])) if direction else []
+    check("the spiked topic is not quoted as rising or falling",
+          direction is not None
+          and not any("keyword research" in x for x in named))
+    check("the spiked topic is named as too erratic to read",
+          direction is not None and "keyword research"
+          in direction.evidence.get("too_erratic_to_read", []))
+    rows = {r["topic"]: r for r in tg.topic_rows()}
+    check("readability travels with the topic row",
+          rows["rank tracker"]["growth_readable"] is True
+          and rows["keyword research"]["growth_readable"] is False)
+    check("the commercial share is the forecast's own set of jobs",
+          rows["rank tracker"]["commercial_share"] == 1.0
+          and rows["keyword research"]["commercial_share"] == 0.0)
+    only_spiked = K.Graph("keyword research", "United States", "en")
+    only_spiked.add_rows([{"term": "keyword research", "volume": 90500,
+                           "cpc": 14.7, "competition_index": 30,
+                           "low_bid": 5.0, "high_bid": 30.0,
+                           "trend": tg.keywords["keyword research"].trend,
+                           "months": tg.keywords["keyword research"].months,
+                           "source": "expanded"}])
+    check("the network is not told a direction the series cannot carry",
+          only_spiked.stats()["growth"] is None)
+    open_c = next((c for c in tclaims if c.kind == "open"), None)
+    empty_c = next((c for c in tclaims if c.kind == "empty"), None)
+    check("open ground says how many of them are there to buy",
+          open_c is not None and "commercial_share" in open_c.evidence
+          and "buying, comparing" in open_c.text)
+    check("the empty-ground rival is built from the same numbers",
+          empty_c is not None and open_c is not None
+          and empty_c.topic == open_c.topic
+          and empty_c.evidence["commercial_share"]
+          == open_c.evidence["commercial_share"])
+    check("open and empty contradict each other, as a pair should",
+          open_c is not None and empty_c is not None
+          and open_c.forbids != empty_c.forbids
+          and open_c.assertion != empty_c.assertion)
+    shape = report.render(tg, tclaims, threads[:2], dict(man, seed="seo tools"))
+    check("the shape table carries a buying-or-comparing column",
+          "buying or comparing" in shape)
+    check("the report names what it left out of direction",
+          "left out of every statement about direction" in shape
+          and "keyword research" in shape)
+    check("the report says a topic is a reading of this corpus",
+          "A topic is what this run made of it" in shape)
 
     print("question shapes")
     try:

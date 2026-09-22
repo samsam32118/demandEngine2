@@ -1062,3 +1062,133 @@ cached corpora whose keywords have no spikes, and invisible to five
 previous market reports because a plausible-looking decline is exactly
 what a reader expects from this category. It took two runs of the *same*
 market disagreeing with each other to surface it.
+
+---
+
+## it-20 — reviewing the skill against what the AnswerThePublic campaign exposed
+
+Six seeds, ten runs, and four hand-written scripts to get from the
+reports to a strategy. Everything a script had to do by hand is a thing
+the skill should have done, so each one was read as a defect report.
+
+### 1. The lead finding was backwards, and the test could not catch it
+
+`open` said *"The open ground is “keywords”: 100% of its 267,160 monthly
+searches name no company at all."* True, and worthless: 2% of those
+searches were anyone buying or comparing. Nobody had claimed the ground
+because there was nothing on it. A founder acting on the sentence buys
+ads against people learning what a keyword is.
+
+The account test could not have caught it, because the rival it was
+offered — *"every part of this market already has suppliers"* — is not
+the account that competes with it. Jev chooses between the two accounts
+code hands it, and code handed it the wrong pair.
+
+**Fix:** the share of the topic that is buying, comparing or looking for a
+supplier (the forecast's own `BIDDABLE` set, now one definition in
+`kgraph`) goes into the sentence and the evidence; the rival becomes
+*"there is almost nobody in it looking to buy"*; and the mirror-image
+claim `empty` is built from the same numbers so that the account test,
+not the generator, decides. Measured on six corpora:
+
+| topic | commercial | `open` | `empty` |
+|---|---:|---|---|
+| seo optimization tools | 96% | **kept** (account 0.96) | rival 0.06 |
+| sourdough bread starter | 95% | account 0.95, fair-reading 0.48 | rival 0.03 |
+| pmo software | 100% | account 0.89, fair-reading 0.30 | rival 0.06 |
+| content marketing | 2% | rival 0.43 | **kept** (0.87) |
+| seo tips | 0% | rival 0.40 | **kept** (0.92) |
+| seo and keyword | 0% | rival 0.22 | account 0.88, fair-reading 0.35 |
+
+Never both. The account test picks the commercial side at 0.89–0.96 and
+the empty side at 0.87–0.92, with the wrong side at 0.03–0.43.
+
+**The first wording of `empty` was killed on every corpus, and it
+deserved it.** It said the topic was unbranded *because* there was
+nothing to sell there. Fair-reading gave it 0.17–0.48 while the account
+test was picking its side — correctly, since a mechanism is not a
+measurement. Restated as the conjunction the numbers contain, it reads
+0.50–0.62 where it should survive, and the account margins sharpened
+from 0.51/0.75 to 0.88/0.92. The test does not care whose sentence it is.
+
+**Left open:** `pmo software` and `sourdough` carry perfect numbers for
+`open` (unbranded 1.0, commercial 0.95–1.0) and fair-reading rejects it
+anyway. One cause was measured: the evidence carried the *market's*
+brand list (asana, jira, smartsheet) next to "name no company at all".
+Judged fresh, cache off, single-claim batches: 0.31, 0.37 with the list;
+0.45, 0.46 without. The claim now carries the topic's own brands, which
+is the right evidence regardless — and it is not enough on its own to
+clear 0.5, so the residual is unexplained and stays that way here.
+
+### 2. Direction claims quoted series that could not carry one
+
+After it-19 a median survives a spike, but nothing survives a series that
+swings 450x inside the compared window, and `direction` was still naming
+`seo tips` "at 23.01x" as the exception running the other way. The gate
+belongs in the skill, and it must not be a constant — nobody can defend
+"3x is too erratic".
+
+**Fix, with no threshold in it:** a series is readable when the ratio of
+window sums and the ratio of window medians fall on the same side of
+1.0. The series is asked whether it agrees with itself. `keyword
+research` (0.29x by sum, 3.42x by median) is out; a smooth 0.65x decline
+is in. `growth_readable` travels with every topic row, the `direction`
+claim names what it excluded in a `too_erratic_to_read` list, the report
+says so in *How to read this*, and the network's `o_up` node goes
+unobserved rather than misinformed when the market's own series fails
+the test. On `content ideas` it excluded `content marketing`, `marketing
+and content` and `content creation`.
+
+**The limit, recorded rather than patched:** `seo tips` passes — sum
+26.2x, median 3.40x, both up — and is quoted at 2.98x on a series that
+swings 31.7x. Both estimators agree on the sign, so by the rule it is
+readable and the median is the figure shown. A half-window test would
+catch it and would also flag every seasonal market, which is worse.
+
+### 3. The report hid the number that decided the strategy
+
+*The shape of the market* showed one label per topic. `seo tools` read
+"doing it themselves" and is 37% people comparing or buying; `keywords`
+read "trying to understand it" and is 2%. A *buying or comparing* column
+now sits beside brand share, on the same job set the forecast bids on, so
+the two can be read against each other.
+
+### 4. Two things the reader was not told
+
+A topic is a cluster mined from what this run harvested. `seo marketing
+tools` read 2% branded pooled across five corpora and 53% in the run
+centred on it. Keyword series agree across runs exactly (234/234); topic
+percentages are a reading of the corpus. The report now says so. Not
+fixable without changing what a topic is, and disclosed rather than
+hidden.
+
+### 5. Dead output
+
+`long_growth` was computed into every topic row and read by nothing.
+Removed.
+
+### The suite
+
+| | before | after |
+|---|---:|---:|
+| selftest | 73/73 | **88/88** |
+| evals, jev arm | 18/18 | **18/18** |
+| evals, code arm | 16/18 | 16/18 |
+| jev mean kept share | 0.30 | 0.24 |
+
+The fifteen new checks build a two-topic graph with four years of
+history, one readable and one not, and pin: the spiked topic is neither
+rising nor falling but named as erratic; the network is told no
+direction for it; `open` says who is there to buy; `empty` is built from
+the same numbers as its contradiction; the report carries the column and
+both notes. The code arm's two failures are it-8's and it-19's, unchanged.
+Kept share fell because the pair usually resolves to one survivor or
+none, where `open` alone used to survive on brand share.
+
+### Not fixed, and named
+
+The question *how do I win in this space* took six seeds and a pooling
+script. The skill is single-seed by design and the report is right to be;
+a `pool` over several runs' JSON, computing at the keyword level where
+series are stable, is the feature this campaign actually wanted. Not
+built here — it is a feature, not a defect, and this was a review.
