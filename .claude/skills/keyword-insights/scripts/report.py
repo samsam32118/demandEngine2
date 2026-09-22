@@ -1,24 +1,28 @@
-"""The deliverable: a markdown report of findings that are backed by data.
+"""The deliverable: the insights, most valuable first — and the data, beside it.
 
-Three things are here on purpose that most reports leave out.
+The report is one thing. Every finding that survived testing, ranked by the
+judgment model's answer to "which of these would change what the reader does
+the most?", each led by its point in a few words, then the numbers, then the
+searches it rests on. When nothing survived, it says so and stops: padding a
+report with the statements that failed would be the same mistake as hiding
+them, made in the other direction.
 
-**The trail.** How a finding was arrived at is part of the finding. A report
-that shows only conclusions asks to be taken on trust; one that shows the
-chase — what looked odd, what was checked next, what came back — can be
-argued with, which is the only way a reader can tell whether it is any good.
-
-**The dead ends.** A branch that was chased and went nowhere is a real
-result, and an expensive one. Hiding it would make the method look cleverer
-than it is and would quietly repeat the same spend next time.
-
-**The rejections.** Every claim the data could have supported was generated
-and tested. Showing the ones that failed, and why, tells the reader what was
-looked for and not found — which is often more useful than what was.
+Everything else is written beside it as files, because the report's job is
+to say what matters and the files' job is to let anyone check it: every
+keyword with its three axes, every topic and kind of offering, every
+statement tested with each test's score and why it fell, every probe bought
+or declined, the market network, the forecast, and the run itself. What used
+to be sections of the report — the trail, the rejections, the shape of the
+market, the network's conclusions — are rows in those files now.
 """
 
 from __future__ import annotations
 
+import csv
 import datetime as _dt
+import json
+import os
+from dataclasses import asdict
 from typing import Sequence
 
 import insights
@@ -26,15 +30,16 @@ import judge
 import market_net as MN
 import kgraph as K
 
-n, usd, pct = insights.n, insights.usd, insights.pct
+n, usd, pct, money0 = insights.n, insights.usd, insights.pct, insights.money0
 
-REJECTION_ORDER = ("misread", "explains nothing", "would fit any market",
-                   "knowable without data", "changes nothing",
-                   "below threshold")
-
+# Why a statement fell, in words, for `tested.csv`.
 REJECTION_GLOSS = {
+    "kept": "survived every test",
     "misread": "the numbers were right but the reading of them was not",
-    "explains nothing": "it ruled nothing out — true either way",
+    "the data supports the opposite": "the rival account fits the "
+                                      "measurements better",
+    "the data does not settle it": "the measurements do not choose between "
+                                   "it and its rival",
     "would fit any market": "it survived having its subject swapped for an "
                             "unrelated one, so it was never about this market",
     "knowable without data": "it follows from the market's name alone",
@@ -43,404 +48,363 @@ REJECTION_GLOSS = {
                        "cut-off",
 }
 
+# Evidence worth showing under an insight, when present, and what to call
+# it. Everything else in `evidence` is in `tested.csv`.
+DETAIL_KEYS = {
+    "rising": "Rising", "falling": "Falling",
+    "also_rising": "Also rising", "also_falling": "Also falling",
+    "too_erratic_to_read": "Too erratic to read",
+    "topics_against_the_grain": "Against the grain",
+    "brands_in_topic": "Companies named",
+}
 
-def _evidence_lines(claim: judge.Claim) -> list[str]:
-    out = []
-    for key, value in claim.evidence.items():
-        if isinstance(value, dict):
-            inner = ", ".join(f"{k} {v}" for k, v in value.items())
-            out.append(f"- **{key.replace('_', ' ')}**: {inner}")
-        elif isinstance(value, list):
-            if not value:
-                continue
-            shown = ", ".join(str(v) for v in value[:12])
-            out.append(f"- **{key.replace('_', ' ')}**: {shown}")
-        elif isinstance(value, float):
-            out.append(f"- **{key.replace('_', ' ')}**: {value:,.2f}")
-        elif isinstance(value, int):
-            out.append(f"- **{key.replace('_', ' ')}**: {value:,}")
-        else:
-            out.append(f"- **{key.replace('_', ' ')}**: {value}")
-    return out
-
-
-def _confidence_line(claim: judge.Claim, arm: str) -> str:
-    if arm == "code":
-        return (f"*Kept by the threshold arm; speaks for "
-                f"{pct(claim.weight)} of measured searching.*")
-    return (f"*Jev — describes these searches: {claim.reads_true:.2f} · "
-            f"rules out the alternative: {claim.forbids_p:.2f} · "
-            f"would not fit another market: {1 - claim.swappable:.2f} · "
-            f"not guessable without data: {1 - claim.obvious:.2f} · "
-            f"out of line for this kind of market: {claim.surprising:.2f} · "
-            f"for the reader this is “{claim.stakes_label}”*")
+# Each offering insight shows the columns it is about, and no others: the
+# same five-column table printed under three insights said nothing new the
+# second and third time.
+OFFERING_COLUMNS = {
+    "offer_money": (("searches", "searches/mo"),
+                    ("share_of_searching", "of the searching"),
+                    ("share_of_ad_spend", "of the ad spend"),
+                    ("click_price", "click price")),
+    "offer_growth": (("searches", "searches/mo"),
+                     ("year_on_year", "year on year")),
+    "offer_open": (("shopping_searches", "shopping searches/mo"),
+                   ("shoppers_naming_a_company", "of them naming a company")),
+}
 
 
-def _trail_diagram(seed: str, trail: Sequence) -> list[str]:
-    if not trail:
-        return []
-    lines = ["```mermaid", "flowchart TD",
-             f'  S["seed: {seed}"]']
-    prev = "S"
-    for i, thread in enumerate(trail):
-        node = f"T{i}"
-        question = thread.question.replace('"', "'")[:70]
-        lines.append(f'  {node}["{question}"]')
-        lines.append(f"  {prev} --> {node}")
-        if thread.status == "paid_off":
-            lines.append(f"  {node}:::hit")
-            prev = node               # went deeper
-        elif thread.status == "dead_end":
-            lines.append(f"  {node}:::miss")
-            prev = "S"                # backtracked to the top
-        else:
-            lines.append(f"  {node}:::open")
-    lines += [
-        "  classDef hit fill:#dff3e8,stroke:#1baf7a,color:#0b3b2a;",
-        "  classDef miss fill:#fbe4dc,stroke:#eb6834,color:#4a1d0c;",
-        "  classDef open fill:#e4edfb,stroke:#2a78d6,color:#10305c;",
-        "```"]
-    return lines
+def data_dir_for(report_path: str) -> str:
+    """Where a report's data goes: beside it, named after it."""
+    return os.path.splitext(report_path)[0] + "-data"
 
 
-def render(graph: K.Graph, claims: Sequence[judge.Claim],
-           trail: Sequence, manifest: dict) -> str:
+# --------------------------------------------------------------------------
+# The report
+# --------------------------------------------------------------------------
+
+def render(graph: K.Graph, claims: Sequence[judge.Claim], trail: Sequence,
+           manifest: dict, data_dir: str = "data") -> str:
     arm = manifest.get("arm", "jev")
     kept = insights.order(claims)
     today = _dt.date.today().isoformat()
-    seo_led = manifest["dataforseo"]
-    jev_led = manifest["jev"]
-    # Two different numbers, and conflating them overstates the report.
-    # `judged` is everything that was asked about; `certain` is the subset
-    # whose intent the words actually resolved. Every finding below is built
-    # on `certain`, so that is the coverage the reader needs.
-    asked = K.share(graph.judged_volume, graph.total_volume)
-    covered = K.share(graph.certain_volume, graph.total_volume)
+    total = max(graph.total_volume, 1)
+    readable = K.share(graph.certain_volume, total)
+    folder = os.path.basename(data_dir.rstrip("/")) or data_dir
 
-    L: list[str] = []
-    L.append(f"# What people actually search around “{graph.seed}”")
+    L: list[str] = [f"# Insights · “{graph.seed}”", ""]
+    L.append(" · ".join(x for x in (
+        graph.geo or "United States", today,
+        f"effort {manifest.get('effort', '')}".strip()) if x))
     L.append("")
-    L.append(f"**{graph.geo or 'United States'} · {today}**")
+    L.append(f"{n(len(graph.keywords))} searches measured, carrying "
+             f"{n(graph.total_volume)} a month; what the person wanted was "
+             f"readable for {pct(readable)} of that searching.")
+    L += _paid_line(manifest.get("forecast"))
     L.append("")
+
+    if kept:
+        rest = len(claims) - len(kept)
+        who = manifest.get("asker") or "the reader"
+        order_note = ("ranked by the judgment model's answer to “which "
+                      f"of these would change what {who} does the most?”"
+                      if arm != "code" else
+                      "ranked by how much of the market each speaks for "
+                      "(threshold arm)")
+        L.append(f"**{len(kept)} insight{'s' if len(kept) != 1 else ''}, "
+                 f"most valuable first** — {order_note}. "
+                 f"{rest} other statement{'s' if rest != 1 else ''} the data "
+                 f"could support {'were' if rest != 1 else 'was'} tested and "
+                 f"did not hold; each is in `{folder}/tested.csv` with the "
+                 f"reason.")
+        L.append("")
+        for i, claim in enumerate(kept, 1):
+            L += _insight(i, claim, arm)
+    else:
+        L.append("## No insights")
+        L.append("")
+        if claims:
+            L.append(f"None of the {len(claims)} statement"
+                     f"{'s' if len(claims) != 1 else ''} this data could "
+                     f"support survived testing — each is in "
+                     f"`{folder}/tested.csv` with the reason it fell. That is "
+                     f"a result, not a failure: nothing the searching here "
+                     f"shows would change a decision.")
+        else:
+            L.append("There was nothing to test: too little searching was "
+                     "found to support any statement at all.")
+        L.append("")
+
+    L += _footer(graph, claims, manifest, folder)
+    return "\n".join(L).rstrip() + "\n"
+
+
+def _paid_line(fc: dict | None) -> list[str]:
+    """What paid search can buy here — a measurement, stated as one.
+
+    It was briefly built as a pair of findings for the tests to choose
+    between, "a small channel" or "a large one". With no reference to hold
+    the number against that is a question about magnitude, which the
+    judgment model cannot answer: it called $273 a month the large channel.
+    A forecast is a fact, so it is reported as one; the comparison is made
+    only against a number the reader supplied (it-22).
+    """
+    if not fc or not fc.get("clicks"):
+        return []
+    line = (f"All of paid search here: **{money0(fc['cost'])} a month** buys "
+            f"every click worth having — {n(fc['clicks'])} clicks at "
+            f"{usd(fc['cpc'])}, from the {n(fc.get('keywords') or 0)} "
+            f"searches worth bidding on.")
+    budget = fc.get("budget")
+    if budget and fc.get("cost"):
+        if budget > fc["cost"]:
+            line += (f" Your {money0(budget)} is {budget / fc['cost']:.1f}x "
+                     f"what that can absorb.")
+        else:
+            line += (f" Your {money0(budget)} buys about "
+                     f"{pct(budget / fc['cost'])} of it.")
+    return [line]
+
+
+def _insight(i: int, claim: judge.Claim, arm: str) -> list[str]:
+    L = [f"## {i}. {claim.headline or claim.text}", "", claim.text, ""]
+    offers = claim.evidence.get("every_offering")
+    if offers and claim.kind in OFFERING_COLUMNS:
+        L += _offering_table(offers, OFFERING_COLUMNS[claim.kind])
+    growing, falling = (claim.evidence.get("growing"),
+                        claim.evidence.get("falling"))
+    if isinstance(growing, dict) and isinstance(falling, dict):
+        L += ["| topic | searches/mo | year on year |", "|---|---:|---:|",
+              f"| {growing['topic']} | {n(growing['searches'])} | "
+              f"{growing['year_on_year']:.2f}x |",
+              f"| {falling['topic']} | {n(falling['searches'])} | "
+              f"{falling['year_on_year']:.2f}x |", ""]
+    details = []
+    for key, label in DETAIL_KEYS.items():
+        value = claim.evidence.get(key)
+        if isinstance(value, list) and value:
+            details.append(f"{label}: {', '.join(str(v) for v in value[:6])}")
+    if details:
+        L += [" · ".join(details), ""]
+    if claim.examples:
+        L += ["Behind it: " + " · ".join(f"`{e}`" for e in claim.examples[:4]),
+              ""]
+    L += [_scores(claim, arm), ""]
+    return L
+
+
+def _offering_table(rows: Sequence[dict],
+                    columns: Sequence[tuple[str, str]]) -> list[str]:
+    def cell(key: str, value) -> str:
+        if value is None:
+            return "\u2014"
+        if key == "click_price":
+            return usd(value)
+        if key == "year_on_year":
+            return f"{value:.2f}x"
+        if key in ("searches", "shopping_searches"):
+            return n(value)
+        return pct(value)
+    out = ["| wants | " + " | ".join(label for _, label in columns) + " |",
+           "|---|" + "---:|" * len(columns)]
+    for r in rows:
+        out.append(f"| {K.OFFERING_NOUNS.get(r['offering'], r['offering'])} | "
+                   + " | ".join(cell(k, r.get(k)) for k, _ in columns) + " |")
+    return out + [""]
+
+
+def _scores(claim: judge.Claim, arm: str) -> str:
+    if arm == "code":
+        return "<sub>Kept by the threshold arm.</sub>"
+    return (f"<sub>Worth to the reader: {claim.stakes_label or '—'} · "
+            f"value weight {claim.weight:.2f} · holds up: fair "
+            f"reading {claim.reads_true:.2f}, beats its rival "
+            f"{claim.account_p:.2f}, specific to this market "
+            f"{1 - claim.swappable:.2f}, not guessable "
+            f"{1 - claim.obvious:.2f}</sub>")
+
+
+def _footer(graph: K.Graph, claims: Sequence[judge.Claim], manifest: dict,
+            folder: str) -> list[str]:
+    rows = graph.topic_rows()
+    erratic = [r["topic"] for r in rows
+               if r.get("growth") is not None and not r.get("growth_readable")]
+    series_rows = sum(len(k.trend) for k in graph.keywords.values())
+    files = [
+        ("keywords.csv", "every search measured — volume, click price, bids, "
+         "competition, what it is about, what the person wants, what kind of "
+         "answer, companies named, where it came from, year on year",
+         len(graph.keywords)),
+        ("offerings.csv", "each kind of answer people want — a service, "
+         "software, a product, information — and what it is worth",
+         len(graph.offering_rows())),
+        ("topics.csv", "each thing people search about, and what it is worth",
+         len(rows)),
+        ("tested.csv", "every statement the data could support, each test's "
+         "score, the verdict and why", len(claims)),
+        ("series.csv", "searches a month for every keyword, month by month",
+         series_rows),
+        ("trail.csv", "every question the loop chased — what it bought, what "
+         "came back", len(manifest.get("trail") or [])),
+        ("network.json", "the market network: what it believed before "
+         "measuring, after, and what moved it", None),
+        ("forecast.json", "Google's forecast for the searches worth bidding on",
+         None),
+        ("run.json", "seed, effort, reader, and what every stage cost", None),
+    ]
+    L = ["---", "", f"**The data** — in `{folder}/`:", "",
+         "| file | what is in it | rows |", "|---|---|---:|"]
+    for name, what, count in files:
+        L.append(f"| `{name}` | {what} | "
+                 f"{n(count) if count is not None else '—'} |")
+    L.append("")
+    note = (f"**About the numbers.** Search volumes and click prices are Google "
+            f"Ads figures for {graph.geo or 'the United States'}, from "
+            f"DataForSEO. Its responses carry no currency, and it documents "
+            f"them as US dollars, so they are shown with "
+            f"`{manifest.get('currency') or '$'}`; convert before budgeting "
+            f"in another. A topic or a kind of offering is a reading of this "
+            f"run's searches, not a fixed property of a phrase — the keyword "
+            f"series underneath are.")
+    if erratic:
+        named = ", ".join(f"“{t}”" for t in erratic[:4])
+        note += (f" {len(erratic)} topic{'s were' if len(erratic) != 1 else ' was'}"
+                 f" left out of every statement about direction ({named}"
+                 f"{' and others' if len(erratic) > 4 else ''}): "
+                 f"{'their' if len(erratic) != 1 else 'its'} monthly figures "
+                 f"swing so widely that the year's total and the median month "
+                 f"disagree about which way it went.")
+    L += [note, ""]
+    seo_led, jev_led = manifest.get("dataforseo") or {}, manifest.get("jev") or {}
     L.append(
-        f"{len(graph.keywords):,} keywords measured, carrying "
-        f"{n(graph.total_volume)} searches a month. "
-        f"{len(graph.judged):,} of them — {pct(asked)} of that searching — "
-        f"were put on two axes: what the search is about, and what the "
-        f"person is trying to do. The words resolved the second question "
-        f"for {len(graph.certain):,} of them, **{pct(covered)} of the "
-        f"market's searching**, and everything below is built on that "
-        f"subset alone; the rest is short head terms that do not say what "
-        f"the searcher wants, and are left out rather than guessed at. "
-        f"{manifest['claims_generated']} statements the data could support "
-        f"were generated and tested; {manifest['claims_kept']} survived.")
-    L.append("")
-    L.append(f"Written for: *{manifest['asker']}*. That matters — a finding "
-             f"is only valuable relative to the decision someone is about to "
-             f"make, so the same data judged for a different reader would "
-             f"keep a different set.")
-    L.append("")
+        f"Every sentence above was assembled by code from those numbers; every "
+        f"judgment — what a search is about, what the person wants, what "
+        f"kind of answer, whether a statement holds, what it is worth — was "
+        f"made by TypeSafe's Jev. No language model wrote any of it. "
+        f"Cost: ${seo_led.get('spent_usd', 0):.2f} of search data, "
+        f"${jev_led.get('usd', 0):.4f} of judgment"
+        + (f", {manifest['seconds']:.0f}s" if manifest.get("seconds") else "")
+        + ".")
+    return L
 
-    # ---- the answer ------------------------------------------------------
+
+# --------------------------------------------------------------------------
+# The data
+# --------------------------------------------------------------------------
+
+def write_data(folder: str, graph: K.Graph, claims: Sequence[judge.Claim],
+               trail: Sequence, manifest: dict) -> list[str]:
+    """Everything underneath the insights, as files anyone can open."""
+    os.makedirs(folder, exist_ok=True)
+    written = []
+
+    def table(name: str, header: Sequence[str], rows) -> None:
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8", newline="") as fh:
+            w = csv.writer(fh)
+            w.writerow(header)
+            w.writerows(rows)
+        written.append(path)
+
+    def document(name: str, payload) -> None:
+        path = os.path.join(folder, name)
+        with open(path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, indent=2, default=str)
+        written.append(path)
+
+    keywords = sorted(graph.keywords.values(), key=lambda k: (-k.volume, k.term))
+    table("keywords.csv",
+          ["term", "searches_a_month", "click_price", "low_bid", "high_bid",
+           "competition", "about", "wants", "wants_readable", "answer",
+           "answer_readable", "companies", "source", "year_on_year",
+           "year_on_year_readable"],
+          [[k.term, k.volume, round(k.cpc, 2), round(k.low_bid, 2),
+            round(k.high_bid, 2),
+            "" if k.competition_index is None else k.competition_index,
+            k.topic or "", k.job or "", k.job_certain, k.offering or "",
+            k.offering_certain, ";".join(k.entities),
+            k.source, _round(K.growth(k.trend), 3),
+            K.growth_readable(k.trend)]
+           for k in keywords])
+
+    table("series.csv", ["term", "month", "searches"],
+          ([k.term, month, value] for k in keywords
+           for month, value in zip(k.months, k.trend)))
+
+    table("topics.csv",
+          ["topic", "keywords", "searches_a_month", "click_price",
+           "names_a_company", "buying_or_comparing", "year_on_year",
+           "year_on_year_readable", "seasonality", "mostly_trying_to",
+           "intent_mix"],
+          [[r["topic"], r["keywords"], r["volume"], r["click_price"],
+            r["branded_share"], r.get("commercial_share"), r.get("growth"),
+            r.get("growth_readable"), r.get("seasonality"),
+            next(iter(r["job_mix"]), ""),
+            "; ".join(f"{j} {v}" for j, v in r["job_mix"].items())]
+           for r in graph.topic_rows()])
+
+    table("offerings.csv",
+          ["offering", "keywords", "searches_a_month", "share_of_searching",
+           "share_of_ad_spend", "click_price", "buying_or_comparing",
+           "names_a_company", "year_on_year", "year_on_year_readable",
+           "priciest", "largest"],
+          [[r["offering"], r["keywords"], r["volume"], r["search_share"],
+            r["spend_share"], r["click_price"], r["commercial_share"],
+            r["branded_share"], r["growth"], r["growth_readable"],
+            "; ".join(f"{t} ({v}/mo, {c})" for t, v, c in r["priciest"]),
+            "; ".join(f"{t} ({v}/mo, {c})" for t, v, c in r["largest"])]
+           for r in graph.offering_rows()])
+
+    ranked = {c.key: i for i, c in enumerate(insights.order(claims), 1)}
+    table("tested.csv",
+          ["rank", "kind", "headline", "verdict", "why", "value_weight",
+           "worth_to_reader", "fair_reading", "account_chosen",
+           "account_support", "specific_to_market", "not_guessable",
+           "surprising", "text", "assertion", "rival", "evidence"],
+          [[ranked.get(c.key, ""), c.kind, c.headline, c.verdict,
+            REJECTION_GLOSS.get(c.verdict, ""), round(c.weight, 4),
+            c.stakes_label, round(c.reads_true, 3), c.account,
+            round(c.account_p, 3), round(1 - c.swappable, 3),
+            round(1 - c.obvious, 3), round(c.surprising, 3), c.text,
+            c.assertion, c.forbids, json.dumps(c.evidence, default=str)]
+           for c in sorted(claims, key=lambda c: (ranked.get(c.key, 10**6),
+                                                  c.kind, c.key))])
+
+    table("trail.csv",
+          ["step", "question", "action", "status", "depth", "asked_for",
+           "worth", "note", "raised_by"],
+          [[i, t.question, t.action, t.status, t.depth, len(t.payload),
+            t.gain_label, t.note, t.origin]
+           for i, t in enumerate(trail, 1)])
+
     verdict = manifest.get("verdict") or {}
     prior = manifest.get("prior") or {}
-    if verdict:
-        L.append("## What this means")
-        L.append("")
-        L.append(
-            "These are not summaries of the findings below. They come from a "
-            "small network of the things a market can be — whether people "
-            "here will pay, whether the words reveal what anyone wants, "
-            "whether buyers have settled on suppliers — whose probability "
-            "tables were supplied by the judgment model in a single request, "
-            "and into which every measurement below enters as evidence. The "
-            "numbers are what that network concludes.")
-        L.append("")
-        L.append("| | before measuring | after | |")
-        L.append("|---|---:|---:|---|")
-        for node, text in MN.DECISION.items():
-            if node not in verdict:
-                continue
-            was, now = prior.get(node, 0.5), verdict[node]
-            arrow = ("rose" if now > was + 0.02 else
-                     "fell" if now < was - 0.02 else "held")
-            L.append(f"| **{text.capitalize()}** | {was:.0%} | "
-                     f"**{now:.0%}** | {arrow} |")
-        L.append("")
+    readings = manifest.get("readings") or {}
+    document("network.json", {
+        "what_this_is": "A small Bayes network over what a market can be. "
+                        "Its probability tables were supplied zero-shot by "
+                        "the judgment model; inference is exact enumeration "
+                        "in code. Its calibration is unverified: read the "
+                        "direction and size of a movement, not the "
+                        "absolute figure.",
+        "conclusions": {text: {"before": prior.get(node), "after":
+                               verdict.get(node)}
+                        for node, text in MN.DECISION.items()
+                        if node in verdict},
+        "properties": {text: {"before": prior.get(node), "after":
+                              verdict.get(node)}
+                       for node, text in MN.LATENT.items() if node in verdict},
+        "what_moved_each_conclusion": {
+            MN.DECISION.get(node, node): [
+                {"shift": delta, "measurement": readings.get(name, name)}
+                for name, delta in moves]
+            for node, moves in (manifest.get("attribution") or {}).items()},
+        "measurements": readings,
+        "rows_without_a_clear_answer": manifest.get("unsplittable_rows"),
+    })
+    document("forecast.json", manifest.get("forecast") or {})
+    document("run.json", manifest)
+    return written
 
-        attribution = manifest.get("attribution") or {}
-        readings = manifest.get("readings") or {}
-        for node, text in MN.DECISION.items():
-            moves = [(n, d) for n, d in attribution.get(node, [])
-                     if abs(d) >= 0.01][:3]
-            if not moves:
-                continue
-            L.append(f"**{text.capitalize()}** — what moved it:")
-            L.append("")
-            for name, delta in moves:
-                direction = "toward" if delta > 0 else "against"
-                L.append(f"- `{delta:+.2f}` {direction} — "
-                         f"{readings.get(name, MN.OBSERVED.get(name, name))}")
-            L.append("")
 
-        L.append("The latent properties these rest on, as the network reads "
-                 "them from the measurements:")
-        L.append("")
-        L.append("| property | before | after |")
-        L.append("|---|---:|---:|")
-        for node, text in MN.LATENT.items():
-            if node in verdict:
-                L.append(f"| {text.capitalize()} | {prior.get(node, 0.5):.0%} "
-                         f"| {verdict[node]:.0%} |")
-        L.append("")
-
-    # ---- findings -------------------------------------------------------
-    L.append("## What the data says")
-    L.append("")
-    if not kept:
-        L.append("Nothing survived. Every statement the measurements could "
-                 "support was either true of any market, guessable without "
-                 "data, or of no consequence to the reader. That is a "
-                 "finding in itself: this keyword's searching has no "
-                 "distinctive shape at the volume measured.")
-        L.append("")
-    for i, claim in enumerate(kept, 1):
-        L.append(f"### {i}. {claim.text}")
-        L.append("")
-        L.extend(_evidence_lines(claim))
-        L.append("")
-        L.append(f"**This rules out:** {claim.forbids}")
-        L.append("")
-        if claim.examples:
-            L.append("Searches behind it: " +
-                     "; ".join(f"`{e}`" for e in claim.examples[:6]))
-            L.append("")
-        L.append(_confidence_line(claim, arm))
-        L.append("")
-
-    # ---- what acting on it would cost ------------------------------------
-    fc = manifest.get("forecast")
-    if fc:
-        cur = manifest.get("currency", "$")
-        L.append("## What it would cost to act on this")
-        L.append("")
-        L.append(
-            f"Google's own forecast for the {fc['keywords']:,} searches here "
-            f"worth bidding on — the ones where someone is buying, comparing "
-            f"or looking for a supplier nearby, not reading a definition or "
-            f"hunting a job. Bid set at {cur}{fc['bid']:,.0f} — the median "
-            f"top-of-page bid already measured on those very keywords, "
-            f"rounded to the whole unit the forecast endpoint accepts — on "
-            f"exact match.")
-        L.append("")
-        L.append("| | |")
-        L.append("|---|---:|")
-        L.append(f"| Clicks available a month | **{fc['clicks']:,.0f}** |")
-        L.append(f"| What each actually costs | {cur}{fc['cpc']:,.2f} |")
-        L.append(f"| To take all of them | **{cur}{fc['cost']:,.0f} a month** |")
-        L.append(f"| Searches behind it | {n(fc['searches'])} a month |")
-        L.append("")
-        if fc.get("bid", 0) > 0 and fc["cpc"] > 0 and fc["cpc"] < fc["bid"]:
-            L.append(
-                f"You would bid {cur}{fc['bid']:,.0f} and pay "
-                f"{cur}{fc['cpc']:.2f} — {1 - fc['cpc'] / fc['bid']:.0%} under "
-                f"your maximum. That gap is the auction saying how much of "
-                f"your bid it actually needs.")
-            L.append("")
-        # The ratio a reader cannot get anywhere else: what a market can
-        # absorb, against what they were going to spend.
-        budget = fc.get("budget")
-        if budget:
-            if fc["cost"] <= 0:
-                covers = 1.0
-            else:
-                covers = min(1.0, budget / fc["cost"])
-            if budget >= fc["cost"]:
-                L.append(
-                    f"**{cur}{budget:,.0f} a month is more than this market "
-                    f"has to sell.** Taking every click worth buying costs "
-                    f"{cur}{fc['cost']:,.0f}, so the constraint here is not "
-                    f"your budget — it is that only {fc['clicks']:,.0f} "
-                    f"people a month can be bought at this bid. Spending "
-                    f"the rest means bidding on searches that are not "
-                    f"buying, or finding customers somewhere other than "
-                    f"search.")
-            else:
-                L.append(
-                    f"**{cur}{budget:,.0f} a month buys about "
-                    f"{fc['clicks'] * covers:,.0f} of the "
-                    f"{fc['clicks']:,.0f} clicks available** — {covers:.0%} "
-                    f"of what this market has to sell at this bid. There is "
-                    f"room here to spend more than you planned.")
-            L.append("")
-        L.append(
-            "A forecast is what Google expects to deliver, not a quote. It "
-            "assumes you win the auctions it thinks you will win; a new "
-            "account with no history usually does worse at first.")
-        L.append("")
-
-    # ---- the trail ------------------------------------------------------
-    L.append("## How this was arrived at")
-    L.append("")
-    L.append(f"The loop makes one measurement, looks for what is out of "
-             f"line, and buys one answer to the question that raises. When "
-             f"an answer does not speak to the question, the branch is "
-             f"abandoned and a different thread is taken up — which is why "
-             f"the map below has ends that stop.")
-    L.append("")
-    L.extend(_trail_diagram(graph.seed, trail))
-    L.append("")
-    if trail:
-        for i, thread in enumerate(trail, 1):
-            mark = {"paid_off": "answered", "dead_end": "dead end",
-                    "unfunded": "not funded", "chasing": "in flight"}.get(
-                        thread.status, thread.status)
-            L.append(f"{i}. **{thread.question}** → *{mark}*"
-                     + (f" — {thread.note}" if thread.note else ""))
-        L.append("")
-    else:
-        L.append("*No follow-up was bought: the first measurement was judged "
-                 "sufficient to answer the question, so the remaining budget "
-                 "was left unspent.*")
-        L.append("")
-
-    # ---- the map --------------------------------------------------------
-    rows = graph.topic_rows()
-    if rows:
-        L.append("## The shape of the market")
-        L.append("")
-        # "mostly trying to" is one label and hides the number that
-        # matters: `seo tools` reads "doing it themselves" and is 37%
-        # people comparing or buying; `keywords` reads "trying to
-        # understand it" and is 2%. Same set of jobs the forecast bids on.
-        L.append("| what people search about | searches/mo | click price | "
-                 "names a brand | buying or comparing | mostly trying to |")
-        L.append("|---|---:|---:|---:|---:|---|")
-        for r in rows[:14]:
-            top_job = next(iter(r["job_mix"]), "")
-            L.append(
-                f"| {r['topic']} | {n(r['volume'])} | "
-                f"{usd(r['click_price'])} | {pct(r['branded_share'])} | "
-                f"{pct(r.get('commercial_share', 0.0))} | "
-                f"{K.JOB_LABELS.get(top_job, top_job)} |")
-        L.append("")
-
-    # ---- rejections -----------------------------------------------------
-    rejected = [c for c in claims if not c.survived()]
-    if rejected:
-        L.append("## Checked, and it did not hold")
-        L.append("")
-        L.append("Every statement the shape of the data permitted was built "
-                 "and tested, including ones that contradict each other. "
-                 "These are the ones that failed, and why — so you can see "
-                 "what was looked for as well as what was found.")
-        L.append("")
-        by_reason: dict[str, list[judge.Claim]] = {}
-        for claim in rejected:
-            by_reason.setdefault(claim.verdict, []).append(claim)
-        for reason in REJECTION_ORDER:
-            group = by_reason.get(reason)
-            if not group:
-                continue
-            L.append(f"**{reason}** — {REJECTION_GLOSS.get(reason, '')}")
-            L.append("")
-            for claim in group[:8]:
-                L.append(f"- {claim.text}")
-            if len(group) > 8:
-                L.append(f"- *…and {len(group) - 8} more*")
-            L.append("")
-
-    # ---- cost -----------------------------------------------------------
-    L.append("## What this cost")
-    L.append("")
-    L.append(f"| | calls | actual |")
-    L.append(f"|---|---:|---:|")
-    L.append(f"| DataForSEO | {seo_led['billable_calls']} billable "
-             f"(+{seo_led['cached_calls']} cached) | "
-             f"${seo_led['spent_usd']:.4f} |")
-    L.append(f"| Jev | {jev_led['requests']} requests, "
-             f"{jev_led['input_tokens']:,} input tokens | "
-             f"${jev_led['usd']:.4f} |")
-    total = seo_led["spent_usd"] + jev_led["usd"]
-    L.append(f"| **total** | | **${total:.4f}** |")
-    L.append("")
-    L.append(f"DataForSEO figures are the `cost` each response reported, not "
-             f"an estimate. Run time {manifest['seconds']}s.")
-    L.append("")
-
-    # ---- method ---------------------------------------------------------
-    L.append("## How to read this")
-    L.append("")
-    L.append(
-        "Every sentence above was assembled by code from measured numbers, "
-        "and every decision about it — does this describe these searches, "
-        "does it rule anything out, could it have been guessed, does it "
-        "matter to you — was made by a typed judgment model answering one "
-        "question at a time. No language model wrote any of it, which is "
-        "why the same keyword run twice returns the same report.")
-    L.append("")
-    unsplittable = manifest.get("unsplittable_rows") or []
-    if verdict:
-        L.append(
-            f"The probabilities at the top come from a network of "
-            f"{len(MN.LATENT)} hidden properties, {len(MN.OBSERVED)} "
-            f"measurements and {len(MN.DECISION)} conclusions. Its "
-            f"probability tables were supplied zero-shot by the judgment "
-            f"model — no training data, no expert interviews — and its "
-            f"inference is exact enumeration in code. **Its calibration is "
-            f"unverified.** The model is trained for calibration, but this "
-            f"network is not a published benchmark, so there is no "
-            f"established answer to check against. Treat the direction and "
-            f"the size of a movement as the signal, and the absolute figure "
-            f"as an estimate."
-            + (f" {len(unsplittable)} of its table rows came back without a "
-               f"clear answer either way, and those rows sit at even odds."
-               if unsplittable else ""))
-        L.append("")
-    L.append(
-        "The two tests worth knowing about: a statement is **swapped** — its "
-        "subject replaced with an unrelated one — and kept only if it then "
-        "reads as false, because a statement that survives that substitution "
-        "was never about this market. And it is asked whether it could be "
-        "**guessed from the market's name alone**; if so, the data paid for "
-        "nothing.")
-    L.append("")
-    L.append(f"Search volume and click prices are Google Ads figures for "
-             f"{graph.geo or 'the United States'}. Volume is a monthly "
-             f"average, not a forecast; click prices are what advertisers "
-             f"have been paying, which is evidence that money moves — not a "
-             f"quote.")
-    L.append("")
-    erratic = [r["topic"] for r in rows
-               if r.get("growth") is not None
-               and not r.get("growth_readable")]
-    if erratic:
-        named = ", ".join(f"\u201c{t}\u201d" for t in erratic[:5])
-        L.append(
-            f"**{len(erratic)} topic{'s were' if len(erratic) != 1 else ' was'} "
-            f"left out of every statement about direction** — {named}"
-            + (" and others" if len(erratic) > 5 else "")
-            + ". Google's monthly figures for them swing so widely inside "
-            "the two years compared that the total of each year and the "
-            "median month of each year disagree about which way it went. A "
-            "series that disagrees with itself is not quoted at either "
-            "figure.")
-        L.append("")
-    L.append(
-        "**A topic is what this run made of it.** Topics are clusters mined "
-        "from the keywords this run happened to harvest, so the same label "
-        "can cover a different set of searches in another run, and its "
-        "brand share and click price move with that membership. The "
-        "keyword series underneath are fixed properties of each term and "
-        "agree across runs exactly; a topic's percentages are a reading of "
-        "this corpus, not of the phrase.")
-    L.append("")
-    L.append(
-        f"**On the currency.** DataForSEO returns click prices as bare "
-        f"numbers — its response carries no currency field — and documents "
-        f"them as US dollars. They are shown here with "
-        f"`{manifest.get('currency', '$')}` on that basis, not because the "
-        f"source said so. If your Google Ads account bills in another "
-        f"currency, convert before budgeting against these figures.")
-    L.append("")
-    return "\n".join(L)
+def _round(value, places):
+    return "" if value is None else round(value, places)

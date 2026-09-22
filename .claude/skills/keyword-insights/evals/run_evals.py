@@ -19,8 +19,10 @@ cannot return "there is nothing here" will return something for anything.
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -65,10 +67,33 @@ def run_one(case: dict, arm: str, live: bool) -> dict:
             data = json.load(fh)
         with open(os.path.join(tmp, "r.md"), encoding="utf-8") as fh:
             report = fh.read()
-    return score(case, data, report)
+        files = _data_files(os.path.join(tmp, "r-data"))
+    return score(case, data, report, files)
 
 
-def score(case: dict, data: dict, report: str) -> dict:
+DATA_FILES = ("keywords.csv", "series.csv", "topics.csv", "offerings.csv",
+              "tested.csv", "trail.csv", "network.json", "forecast.json",
+              "run.json")
+
+
+def _data_files(folder: str) -> dict:
+    """What the run attached: each file, and its row count if a table."""
+    out = {}
+    for name in DATA_FILES:
+        path = os.path.join(folder, name)
+        if not os.path.exists(path):
+            continue
+        if name.endswith(".csv"):
+            with open(path, encoding="utf-8", newline="") as fh:
+                out[name] = max(sum(1 for _ in csv.reader(fh)) - 1, 0)
+        else:
+            with open(path, encoding="utf-8") as fh:
+                out[name] = json.load(fh)
+    return out
+
+
+def score(case: dict, data: dict, report: str, files: dict | None = None
+          ) -> dict:
     man, claims = data["manifest"], data["claims"]
     kept = [c for c in claims if c["verdict"] == "kept"]
     kinds = Counter(c["kind"] for c in kept)
@@ -96,6 +121,25 @@ def score(case: dict, data: dict, report: str) -> dict:
         checks["no_finding_repeated_as_several"] = \
             (max(kinds.values()) if kinds else 0) \
             <= expect["max_repeats_of_one_kind"]
+    # Every case, whatever it expects: the report is the insights ranked by
+    # value, and everything underneath is attached. These replace checks
+    # that looked for the network section by its wording — the network is
+    # a file now, so the check looks in the file.
+    heads = re.findall(r"^## \d+\. (.+)$", report, flags=re.M)
+    by_value = [c.get("headline") for c in sorted(
+        kept, key=lambda c: (-c.get("weight", 0.0), c.get("key", "")))]
+    checks["ranked_by_value"] = heads == by_value
+    files = files or {}
+    checks["attaches_the_data"] = (
+        set(files) == set(DATA_FILES)
+        and files.get("keywords.csv") == man["keywords_measured"]
+        and files.get("tested.csv") == len(claims))
+    net = files.get("network.json") or {}
+    checks["network_says_its_calibration_is_unverified"] = \
+        "unverified" in net.get("what_this_is", "")
+    if not kept:
+        checks["says_so_when_nothing_survives"] = "## No insights" in report
+
     for phrase in expect.get("must_mention", []):
         checks[f"mentions:{phrase}"] = phrase.lower() in report.lower()
     for phrase in expect.get("must_not_mention", []):

@@ -58,10 +58,12 @@ flowchart TB
   CONT -->|"none, or several"| QTOPIC{{"which is this search about?"}}:::jev
   TOPICS --> CONT
   GRAPH --> QJOB{{"what is this person trying to do?<br/>8 fixed options"}}:::jev
+  GRAPH --> QOFF{{"what kind of answer would satisfy them?<br/>service · software · product · information"}}:::jev
   QJOB --> DECIS["decisive? winner ≥ 2x runner-up<br/>if not, held out and reported"]:::code
+  QOFF --> DECIS
   QTOPIC --> DECIS
   PLACED --> CELLS
-  DECIS --> CELLS[("cells: topic × job")]:::code
+  DECIS --> CELLS[("cells: topic × job,<br/>and rows by offering")]:::code
 
   CELLS --> STATS["statistics: click price weighted by searching,<br/>branded share, year on year, seasonality, spread"]:::code
   STATS --> READ["readings — state each number plainly"]:::code
@@ -73,7 +75,7 @@ flowchart TB
   NET --> VERD["posteriors + attribution:<br/>what moved each conclusion"]:::code
   NET --> EIG["expected entropy reduction<br/>per open question"]:::code
 
-  CELLS --> GEN["generate every claim the shape permits,<br/>contradictory pairs included.<br/>text carries numbers, assertion does not"]:::code
+  CELLS --> GEN["generate every claim the shape permits,<br/>contradictory pairs included, and the contrasts:<br/>the money / growth / open ground is in A, not B.<br/>code checks each premise holds as printed"]:::code
   GEN --> QADJ{{"fair reading of the measurements?<br/>which of two accounts?<br/>still true with its subject swapped?<br/>guessable from the name alone?<br/>what does it do for the reader?"}}:::jev
   QADJ --> KEPT["survivors"]:::code
   KEPT --> QRANK{{"which would change what they do most?<br/>groups of 8, then the winners"}}:::jev
@@ -89,10 +91,13 @@ flowchart TB
   BACK --> GRAPH
 
   FCAST --> COST["clicks available · what each costs ·<br/>what a budget buys"]:::code
-  VERD --> REPORT
   FIND --> REPORT
   COST --> REPORT
-  REPORT(["report.md — answer, findings, trail,<br/>what was checked and failed, what it cost"]):::io
+  REPORT(["insights.md — the insights, most valuable first,<br/>and one line on what paid search can buy"]):::io
+  VERD --> DATA
+  GEN --> DATA
+  GRAPH --> DATA
+  DATA(["data/ — keywords · offerings · topics · tested ·<br/>series · trail · network · forecast · run"]):::io
 
   classDef money fill:#fdeae1,stroke:#eb6834,stroke-width:1.5px,color:#4a1d0c;
   classDef jev fill:#e4edfb,stroke:#2a78d6,stroke-width:1.5px,color:#10305c;
@@ -116,7 +121,7 @@ stateDiagram-v2
     OBSERVE: OBSERVE
     OBSERVE: one billable call
     ORIENT: ORIENT
-    ORIENT: place every search on two axes
+    ORIENT: place every search on three axes
     INFER: INFER
     INFER: tables cached — re-inference is free
     DECIDE: DECIDE

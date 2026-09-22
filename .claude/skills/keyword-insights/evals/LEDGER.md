@@ -1314,3 +1314,132 @@ concentration claim to keep.
 - `selfserve` still says "the competitor is doing without" at any share.
   At 1% it was withheld by the majority floor this time; the sentence
   itself leaves the magnitude to judgment.
+
+---
+
+## it-22 — insights ranked by value, the offering axis, and data as files
+
+Asked for: *more insights like "the money is in services, not software";
+the report sorted by insights; when there are none it should not matter;
+all the data attached as files; seed + effort in, insights by value out;
+nothing relying on Claude — only Jev and DataForSEO.*
+
+**The diagnosis was uncomfortable.** The pipeline never touched a language
+model — every import is `jev`, the DataForSEO clients, or the standard
+library. But the two most useful sentences in the last two deliverables
+were not the skill's. "The money is in services, not software" came from
+grepping a `cad to bim` corpus by hand after the run and sorting by click
+price; "rename the product, `keyword` is dying" came from pooling five
+runs by hand. The dependency on Claude was never in the code. It was in
+what the code could not see.
+
+### The offering axis
+
+What the skill could not see was *what kind of answer* a searcher wants.
+`bim modeling services` and `bim software` are both people shopping — one
+for a firm, one for a tool — and the job axis made them the same searcher.
+A third axis, fixed and universal like the jobs: `service`, `software`,
+`product`, `information`, held out when no answer is clearly ahead.
+
+Read on real keywords: five service searches → service at 0.97–1.00;
+`bim software` 0.91, `revit mep software` 0.97 → software;
+`sourdough starter kit` → product 1.00; `sourdough starter recipe` →
+information 1.00; `cad to bim`, `bim`, `scan to bim` → held out.
+
+### Contrasts, and the ones that did not make it
+
+Four families state "the X is in A, not B", with B where the crowd is:
+
+| family | on `cad to bim` | verdict |
+|---|---|---|
+| `offer_money` | the money is in services, not information — $25.81 against $10.93 | kept, account 0.92–0.99 |
+| `offer_growth` | the growth is in software, not services — 1.19x against 0.67x | kept, account 1.00 |
+| `topic_growth` | "bim software" 1.19x against "building information modeling" 0.97x | kept |
+| `offer_open` | see below | not in this market |
+
+Built, measured, and taken out or rebuilt:
+
+- **`offer_buyers`** ("the buyers are in services, not information")
+  restates how two axes overlap — a firm-seeker is nearly always hiring —
+  and fair reading rejected it at 0.30. Removed.
+- **A paid-channel pair** ("a small channel" / "a large one") asked Jev a
+  magnitude with no reference: it called $273 a month the large channel,
+  account 0.58. Magnitudes are the one thing the contract says Jev cannot
+  judge. The forecast is a fact, so it is now a line under the title, and
+  is compared only against a `--budget` the reader supplies.
+- **`offer_open`, three times.** First it named *information* — 4% branded,
+  0% buying — the open ground: it-20's unclaimed-because-unwanted, one
+  level up. A premise check ("the open side has buyers as printed") let 1%
+  through. The fix was to measure the thing the sentence is about: brand
+  share **among the people shopping**. Then it compared services against
+  the most-branded offering, which had 200 shopping searches; now it
+  compares against the offering with the most shopping, as the money
+  contrast compares against the most searching. On `cad to bim` it is
+  still rejected — services and information shoppers both barely name a
+  company — which is correct: the contrast is not in this market.
+
+Across three markets from cache: `cad to bim` keeps money and growth;
+`answerthepublic.com` keeps *the money is in software, not information*;
+`keyword research tool` keeps none — nothing readable was rising and
+services were 0.2% of the searching. Contrasts survive where the data has
+them.
+
+### A new door for the drawings
+
+The first probe run came back 39% children's drawing searches, led by
+`how to drawings` at 301,000 a month. A price probe had combined the
+legitimate topic "drawings" (as-built and construction drawings) with
+"how to", and Google gave the invented phrase the volume of "how to draw".
+No single search outvoted the rest, so `outvoting` stayed silent.
+
+**`invented_giants`**: a search the loop made up or Google suggested that
+outsizes everything the market's own businesses rank for is asked the
+scale question, with that fact in words. Across ten corpora it fires on
+the drawings phrases and on `sourdough starter`'s own name. Twelve cases,
+three fresh asks: all four drawing phrases dropped every time, all five
+sourdough names kept every time; `revit`, `project management` and
+`keyword research` dropped where I had labelled them keep — broader
+subjects, which the relevance criterion names as a reason to say no, and
+which this rule has never reached in practice. Recorded as 9/12, not
+relabelled after the fact.
+
+**Tried and rejected:** admitting a search only when relevance is
+*decisive* (the existing 2x margin, 0.67 for a yes/no). Foreign terms
+dropped rose 92% → 100%; the real market kept fell 95% → 90%, and admitted
+volume collapsed — `cad to bim` 83% → 10%, and `keyword research tool`
+lost `tools for seo`, the heart of the AnswerThePublic insight. The floor
+stays at 0.5, and `modelling 3d` (p = 0.51) remains a coin flip that can
+flip between runs when question batches change. Disclosed, not fixed.
+
+### The report
+
+Insights only, ranked by Jev's value weight — "which of these would
+change what the reader does the most?", already the ranking question —
+each with its headline, its sentence, a table of only its own columns,
+the searches behind it, and how it held up. "No insights" when nothing
+survives. Everything else is nine files beside it: keywords, offerings,
+topics, tested (every statement, its scores, its rank or its reason),
+series, trail, network, forecast, run. The network's conclusions moved to
+`network.json`: its calibration is unverified, and a probability the
+reader cannot check is not an insight.
+
+**The selftest found a real defect:** the offering contrasts sat below
+`generate()`'s early return for a market with no confirmed topic, so such
+a market silently lost them. They run either way now. And the table under
+a contrast rounded to three places before formatting, printing 76% under
+a sentence that said 77%.
+
+### The suite
+
+| | before | after |
+|---|---:|---:|
+| selftest | 115/115 | **154/154** |
+| evals, jev arm | 18/18 | **22/22** |
+| evals, code arm | 17/18 | 19/21 |
+
+The jev arm gained four universal checks — ranked by value, every data
+file attached with matching row counts, the network file carrying its
+caveat, "No insights" when nothing survives — and the three that read the
+network section by its wording now read the file. The code arm's new
+failure is `thin-niche/code`: the new families gave its hand-tuned
+thresholds more to keep. Not re-tuned, as in it-19.

@@ -4,5 +4,7 @@
   "asker": "someone who read about this on the internet and wants to know if it is real",
   "iterations": 2,
   "why": "There is no such market. A method that cannot return nothing will return something for anything, and this is the only case that can catch that.",
-  "expect": {"max_findings": 0}
+  "expect": {
+    "max_findings": 0
+  }
 }

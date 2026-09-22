@@ -7,6 +7,7 @@
 | **keyword** | DataForSEO | monthly volume, click price, competition, top-of-page bids, 12 months of history |
 | **topic** | mined as n-grams from the corpus, confirmed by Jev | whether it names a thing rather than narrowing one |
 | **job** | fixed universal taxonomy, assigned by Jev | what the searcher is trying to do |
+| **offering** | fixed universal taxonomy, assigned by Jev | what kind of answer would satisfy them — a service, software, a physical product, information |
 | **brand** | mined as tokens, confirmed by Jev | a company already named in the search |
 
 ## Edges
@@ -20,9 +21,23 @@ keyword --ABOUT--> topic      containment where the topic is literally in the
 keyword --SERVES--> job       always Jev. No amount of string matching
                               reaches what a person wants
 
+keyword --WANTS--> offering   always Jev, beside the job, and held out the
+                              same way when no answer is clearly ahead —
+                              "cad to bim" does not say whether the person
+                              wants a firm or a tool, and is not forced
+
 keyword --NAMES--> brand      string matching, once Jev has confirmed which
                               mined tokens are company names
 ```
+
+The **offering** is what separates two searchers doing the same job:
+`bim modeling services` and `bim software` are both shopping — for a firm
+to do the work, and for a tool to do it themselves. Grouped by offering,
+the arithmetic in `Graph.offering_rows` gives each kind of answer its share
+of the searching and of the implied ad spend (over the same searches), its
+click price weighted by searching, its share buying or comparing (over
+searches whose intent read), its brand share **among the people shopping**,
+and its year on year. The contrast families read those rows.
 
 A **cell** is a (topic, job) pair: *people looking for T in order to J*. It
 is the unit an insight is about, and it is where the two axes pay off —
@@ -62,6 +77,10 @@ which topics break the pattern.
 | `split` | biggest term vs dearest click | is the money where the attention is? |
 | `head` | largest keyword and its job | what is the single biggest thing happening here? |
 | `money_seat` | the cell whose share of implied spend runs furthest ahead of its share of searching, both over the same readable searches | where is spend concentrated out of proportion? Not made when no cell's spend runs ahead at the precision the sentence prints |
+| `offer_money` | click price and shares of searching and spend, by offering; the dearest offering against the one with the most searching | where is a search worth the most, against where most searching is? Not made unless the dearest offering is also a smaller share of the searching, and its spend share exceeds its search share as printed |
+| `offer_growth` | year on year by offering, on readable series only | which kind of answer is demand moving toward? Needs one rising and one falling as printed |
+| `offer_open` | brand share among the people shopping, by offering; the least branded against the offering with the most shopping | where do buyers have no supplier in mind, against where most buying happens? |
+| `topic_growth` | readable topic series; the biggest rising topic against the biggest falling one | which of this market's names is growing and which is dying? |
 | `selfserve` | self-serve volume share, and where it peaks | is the competitor a company, or doing without? |
 | `season` | peak month over mean, per topic | is there a season, and where is it sharpest? |
 | `substitute` | keywords naming two topics at once | what is weighed against what? |

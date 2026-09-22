@@ -407,13 +407,96 @@ def outvoting(client: jev.Client, graph: K.Graph,
     return drop, Stage("outvote", asked, usage, notes)
 
 
+INVENTED_MEASURED = ("This search was not among the searches the businesses "
+                     "selling here rank for — it was suggested by Google or "
+                     "made by combining words — and it is typed more often "
+                     "each month than any search those businesses do rank "
+                     "for.")
+
+
+def invented_giants(client: jev.Client, graph: K.Graph,
+                    admitted: Sequence[K.Keyword], asker: str
+                    ) -> tuple[list[str], Stage]:
+    """Drop an invented or suggested search that outsizes everything the
+    market's own businesses rank for, unless most people typing it are here.
+
+    `outvoting` catches one search larger than the rest of the market put
+    together. It missed a family of them: a price probe built `how to
+    drawings`, `best drawings` and `what is drawings` from the legitimate
+    topic "drawings" (as-built and construction drawings), Google gave the
+    invented phrase the volume of its nearest real query — 301,000 a month,
+    from "how to draw" — and the relevance question read it in the CAD
+    sense. No single search was a majority; together they were 39% of the
+    market and made "information" its largest part.
+
+    The skill already knew the principle: invented keywords are hypotheses,
+    harvested ones are observed commercial vocabulary. A businesses that pays
+    to rank is evidence of what a market really searches, so a phrase code
+    made up, or Google suggested, that is bigger than *any* search those
+    businesses rank for is far more likely a common phrase in another sense.
+    Code finds it; the fact goes to Jev in words; Jev judges.
+
+    Across ten markets on disk it fires on the drawings phrases in the two
+    contaminated `cad to bim` corpora and on the name of `sourdough starter`
+    and its close variants, which it keeps. Twelve cases, three fresh asks:
+    the drawings phrases dropped every time, the sourdough names kept every
+    time, and three broader terms (`revit` for `cad to bim`, `project
+    management`, `keyword research`) dropped where they had been labelled
+    keep — broader subjects, which the relevance criterion itself names as
+    a reason to say no, and which this rule has never reached in practice
+    (it-22). With no harvest there is no observed vocabulary to compare
+    against, and the rule does not apply.
+    """
+    harvested = [k.volume for k in admitted if k.source.startswith("site:")]
+    if not harvested:
+        return [], Stage("invented", 0, jev.Usage())
+    ceiling = max(harvested)
+    giants = sorted((k for k in admitted
+                     if not k.source.startswith("site:")
+                     and k.volume > ceiling),
+                    key=lambda k: (-k.volume, k.term))
+    if not giants:
+        return [], Stage("invented", 0, jev.Usage())
+    result = client.ask(_market_state(graph, asker), {
+        f"giant:{i}": jev.Noul(
+            instructions={"search": k.term, "market": graph.seed,
+                          "measured": INVENTED_MEASURED,
+                          "question": OUTVOTE_QUESTION},
+            criteria=OUTVOTE_CRITERIA)
+        for i, k in enumerate(giants)})
+    drop = [k.term for i, k in enumerate(giants)
+            if not result.noul(f"giant:{i}").yes(YES)]
+    notes = []
+    if drop:
+        big = max((k for k in giants if k.term in drop), key=lambda k: k.volume)
+        notes.append(f"{len(drop)} made-up or suggested search"
+                     f"{'es' if len(drop) != 1 else ''} larger than anything "
+                     f"the businesses here rank for, led by \u201c{big.term}"
+                     f"\u201d at {big.volume:,} a month — most people typing "
+                     f"{'them' if len(drop) != 1 else 'it'} mean something "
+                     f"else, so dropped")
+    kept = len(giants) - len(drop)
+    if kept:
+        notes.append(f"{kept} larger than anything the businesses here rank "
+                     f"for, and the market's own name — kept")
+    return drop, Stage("invented", len(giants), result.usage, notes)
+
+
 # --------------------------------------------------------------------------
 # Orient, part 2: what is each searcher doing?
 # --------------------------------------------------------------------------
 
+OFFERING_CRITERIA = {
+    **K.OFFERINGS,
+    NONE: "None of these — one named company's own site or account, a job, "
+          "or nothing that says what kind of answer they want",
+}
+
+
 def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
            asker: str) -> Stage:
-    """Place each keyword on the two axes: what it is about, and what for.
+    """Place each keyword on the three axes: what it is about, what for,
+    and what kind of answer would satisfy the person searching.
 
     Containment settles the topic axis wherever the topic is literally in the
     keyword — that is a fact about the string, and paying a model to read a
@@ -456,10 +539,17 @@ def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
                             "they trying to do?",
             },
             criteria=dict(K.JOBS))
+        questions[f"offer:{i}"] = jev.Choice(
+            instructions={
+                "search": kw.term,
+                "question": "Someone types `search` into Google. What kind "
+                            "of answer are they hoping to find?",
+            },
+            criteria=OFFERING_CRITERIA)
 
     result = client.ask(_market_state(graph, asker), questions)
 
-    low_topic = low_job = 0
+    low_topic = low_job = low_offer = 0
     for i, kw in enumerate(keywords):
         if i in needs_topic:
             answer = result.choice(f"topic:{i}")
@@ -475,6 +565,12 @@ def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
         kw.job_certain = decisive(job)
         if not kw.job_certain:
             low_job += 1
+        offer = result.choice(f"offer:{i}")
+        kw.offering = offer.choice if offer.choice in K.OFFERINGS else ""
+        kw.offering_confidence = offer.confidence
+        kw.offering_certain = bool(kw.offering) and decisive(offer)
+        if not kw.offering_certain:
+            low_offer += 1
 
     notes = [f"{len(keywords)} keywords judged; "
              f"{len(keywords) - len(needs_topic)} placed by containment"]
@@ -484,6 +580,10 @@ def assign(client: jev.Client, graph: K.Graph, keywords: Sequence[K.Keyword],
         notes.append(f"{low_job} of {len(keywords)} searches did not reveal "
                      f"what the person wanted (no intent clearly ahead of "
                      f"the runner-up) — held out of the analysis")
+    if low_offer:
+        notes.append(f"{low_offer} of {len(keywords)} searches did not say "
+                     f"what kind of answer they wanted — a service, "
+                     f"software, a product or information")
     return Stage("assign", len(questions), result.usage, notes)
 
 
@@ -566,6 +666,9 @@ class Claim:
     examples: list[str]
     topic: str = ""
     kind: str = ""
+    # The point, in the words a reader scans for: "The money is in
+    # services, not software". The numbers stay in `text`.
+    headline: str = ""
     # Filled by adjudication.
     reads_true: float = 0.0
     forbids_p: float = 0.0

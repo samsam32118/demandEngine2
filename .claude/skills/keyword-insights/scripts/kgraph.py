@@ -75,6 +75,31 @@ JOB_LABELS: dict[str, str] = {
     "brand_desk": "going to one company's own front door",
 }
 
+# What the person expects to find at the end of the search: the third axis.
+# `job` says what they are doing; this says what kind of answer would
+# satisfy them. `bim modeling services` and `bim software` are both people
+# shopping — one for a firm to do the work, one for a tool to do it
+# themselves — and on `cad to bim` a click on the first cost $72 against $8
+# for the second. That contrast was found by hand, after a run, because the
+# skill had no way to see it: two searchers doing the same job were the same
+# searcher. Fixed and universal, like the jobs, for the same reason: a
+# taxonomy mined per run could always be made to flatter the data.
+OFFERINGS: dict[str, str] = {
+    "service": "Someone to do it for them — a firm, agency, contractor, "
+               "consultant, freelancer or provider who does the work",
+    "software": "A tool to use themselves — software, an app, a platform, a "
+                "plugin or an online tool",
+    "product": "A physical thing to buy and own — goods, equipment, a kit, "
+               "materials or supplies",
+    "information": "Knowledge — an explanation, definition, guide, tutorial, "
+                   "course, example or the answer to a question",
+}
+# How each reads in a sentence: "the money is in services, not software".
+OFFERING_NOUNS: dict[str, str] = {
+    "service": "services", "software": "software",
+    "product": "physical products", "information": "information",
+}
+
 # The jobs that make a search worth bidding on: someone buying, comparing,
 # or looking for a supplier nearby. The closing forecast is priced on
 # exactly this set, and the "buying or comparing" share in every topic row
@@ -139,6 +164,11 @@ class Keyword:
     # assignments would launder that uncertainty into a confident-looking
     # number, so they are kept, reported, and left out of the analysis.
     job_certain: bool = False
+    # The third axis, read the same way: kept only where one answer is
+    # clearly ahead of the runner-up.
+    offering: str | None = None
+    offering_confidence: float = 0.0
+    offering_certain: bool = False
     entities: list[str] = field(default_factory=list)
 
     @property
@@ -774,6 +804,63 @@ class Graph:
                 if best is None or lift > best[0]:
                     best = (lift, bare, kw)
         return best
+
+    def offering_rows(self) -> list[dict]:
+        """One row per kind of offering: the arithmetic, and nothing more.
+
+        Over the searches whose offering read clearly. Shares of searching
+        and of spend are taken over those same searches — dividing spend by
+        a wider set is how `money_seat` came to say "concentrated" over
+        numbers saying the opposite (it-21). What share is buying is taken
+        over the ones whose intent also read clearly, because a job the
+        model could not tell apart is not evidence about buying.
+        """
+        placed = [k for k in self.keywords.values()
+                  if k.offering_certain and k.offering in OFFERINGS
+                  and k.volume > 0]
+        total_volume = sum(k.volume for k in placed)
+        total_money = sum(k.money for k in placed)
+        out = []
+        for offering in OFFERINGS:
+            kws = [k for k in placed if k.offering == offering]
+            if not kws:
+                continue
+            vol = sum(k.volume for k in kws)
+            money = sum(k.money for k in kws)
+            read = [k for k in kws if k.job_certain]
+            read_vol = sum(k.volume for k in read)
+            buying = [k for k in read if k.job in BIDDABLE]
+            trend = weighted_trend(kws)
+            g = growth(trend)
+            out.append({
+                "offering": offering,
+                "keywords": len(kws),
+                "volume": vol,
+                "money": round(money, 2),
+                "search_share": round(share(vol, total_volume), 4),
+                "spend_share": round(share(money, total_money), 4),
+                "click_price": round(click_price(kws), 2),
+                "commercial_share": (round(share(
+                    sum(k.volume for k in buying), read_vol), 3)
+                    if read_vol else None),
+                "branded_share": round(share(
+                    sum(k.volume for k in kws if k.entities), vol), 3),
+                # Among the people shopping: what "open ground" means.
+                "buying_keywords": len(buying),
+                "buying_volume": sum(k.volume for k in buying),
+                "buyers_naming_a_company": (round(share(
+                    sum(k.volume for k in buying if k.entities),
+                    sum(k.volume for k in buying)), 3)
+                    if sum(k.volume for k in buying) else None),
+                "growth": round(g, 3) if g is not None else None,
+                "growth_readable": growth_readable(trend),
+                "priciest": [(k.term, k.volume, round(k.cpc, 2)) for k in
+                             sorted(kws, key=lambda k: (-k.cpc, -k.volume,
+                                                        k.term))[:3]],
+                "largest": [(k.term, k.volume, round(k.cpc, 2)) for k in
+                            sorted(kws, key=lambda k: (-k.volume, k.term))[:3]],
+            })
+        return sorted(out, key=lambda r: (-r["volume"], r["offering"]))
 
     def stats(self) -> dict:
         """Everything the network's observed nodes are evidence about.

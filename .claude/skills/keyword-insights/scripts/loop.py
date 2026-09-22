@@ -288,11 +288,17 @@ class Run:
         leaving = set(gone)
         admitted = [k for k in self.graph.keywords.values()
                     if k.term not in leaving]
+        invented, st = judge.invented_giants(self.client, self.graph,
+                                             admitted, self.args.asker)
+        if st.questions:
+            self.stage(st)
+        leaving |= set(invented)
+        admitted = [k for k in admitted if k.term not in leaving]
         outvoted, st = judge.outvoting(self.client, self.graph, admitted,
                                        self.args.asker)
         if st.questions:
             self.stage(st)
-        gone += outvoted
+        gone += invented + outvoted
         if gone:
             self.graph.drop(gone)
         return gone
@@ -788,15 +794,21 @@ def cmd_run(args) -> int:
         return 1
 
     out = args.out or f"insights-{_slug(args.keyword)}.md"
-    text = report_mod.render(run.graph, run.claims, run.trail, run.manifest())
+    data_dir = report_mod.data_dir_for(out)
+    manifest = run.manifest()
+    text = report_mod.render(run.graph, run.claims, run.trail, manifest,
+                             data_dir)
     with open(out, "w", encoding="utf-8") as fh:
         fh.write(text)
+    files = report_mod.write_data(data_dir, run.graph, run.claims, run.trail,
+                                  manifest)
     if args.json:
         with open(args.json, "w", encoding="utf-8") as fh:
             json.dump({"manifest": run.manifest(),
                        "graph": run.graph.to_dict(),
                        "claims": [asdict(c) for c in run.claims]}, fh, indent=2)
-    print(f"\nwrote {out}")
+    print(f"\nwrote {out}\n      and {len(files)} data files in "
+          f"{data_dir}/")
     return 0
 
 
@@ -904,7 +916,9 @@ def main(argv=None) -> int:
     r.add_argument("--arm", choices=("jev", "code"), default="jev",
                    help="'jev' judges every claim; 'code' is the "
                         "hand-tuned-threshold control arm")
-    r.add_argument("--out", help="report path (default insights-<seed>.md)")
+    r.add_argument("--out", help="report path (default insights-<seed>.md); "
+                                 "the data is written beside it, in "
+                                 "<name>-data/")
     r.add_argument("--json", help="also dump graph, claims and ledger here")
     r.add_argument("--no-forecast", action="store_true",
                    help="skip the closing forecast call. It is the single "

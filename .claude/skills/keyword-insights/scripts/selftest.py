@@ -8,9 +8,12 @@
 from __future__ import annotations
 
 import argparse
+import csv
+import json
 import os
 import re
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -359,12 +362,14 @@ def offline() -> None:
                           "spent_usd": 0.09},
            "jev": {"requests": 3, "input_tokens": 1000, "usd": 0.00004}}
     md = report.render(g, claims, threads[:2], man)
-    check("report renders", len(md) > 1500)
-    check("report shows what it cost", "What this cost" in md)
-    check("report shows the rejections section when there are any",
-          "Checked, and it did not hold" in md or
-          all(c.survived() for c in claims))
-    check("report shows the trail", "mermaid" in md)
+    check("report renders", md.startswith("# Insights") and "The data" in md)
+    check("report shows what it cost",
+          "Cost: $0.09 of search data" in md)
+    check("report points to the statements that did not hold",
+          all(c.survived() for c in claims) or "tested.csv" in md)
+    check("the report is insights and data, not method",
+          "What this means" not in md and "mermaid" not in md
+          and "How to read this" not in md)
 
     # The "what it would cost to act" section is downstream of a forecast
     # call, which is downstream of which keywords Jev placed as biddable.
@@ -377,11 +382,21 @@ def offline() -> None:
                        "impressions": 0.0, "ctr": 0.0, "bid": 12,
                        "match": "exact", "window": "next_month",
                        "keywords": 43, "searches": 1810, "budget": None}))
-    check("a forecast becomes the section that prices the move",
-          "What it would cost to act on this" in priced
-          and "Clicks available a month" in priced)
-    check("the bid is printed as the whole number that was sent",
-          "Bid set at $12 " in priced and "Bid set at $12.00" not in priced)
+    check("a forecast becomes the line that says what paid search can buy",
+          "All of paid search here: **$1,858 a month**" in priced
+          and "232 clicks at $8.00" in priced)
+    budgeted = report.render(g, claims, threads[:2], dict(
+        man, forecast={"clicks": 232.31, "cpc": 8.0, "cost": 1857.62,
+                       "bid": 12, "keywords": 43, "budget": 10000}))
+    check("a budget is set against what the market can absorb",
+          "Your $10,000 is 5.4x what that can absorb" in budgeted)
+    with tempfile.TemporaryDirectory() as tmp:
+        report.write_data(tmp, g, claims, threads[:2], dict(
+            man, forecast={"clicks": 232.31, "cpc": 8.0, "cost": 1857.62,
+                           "bid": 12, "keywords": 43}))
+        fc = json.load(open(os.path.join(tmp, "forecast.json")))
+    check("the bid kept with the forecast is the whole number that was sent",
+          fc["bid"] == 12 and isinstance(fc["bid"], int))
 
     print("the market network")
     # A uniform net must be a net that concludes nothing.
@@ -467,13 +482,17 @@ def offline() -> None:
           and open_c.forbids != empty_c.forbids
           and open_c.assertion != empty_c.assertion)
     shape = report.render(tg, tclaims, threads[:2], dict(man, seed="seo tools"))
-    check("the shape table carries a buying-or-comparing column",
-          "buying or comparing" in shape)
+    with tempfile.TemporaryDirectory() as tmp:
+        report.write_data(tmp, tg, tclaims, threads[:2], man)
+        topics_head = next(csv.reader(open(os.path.join(tmp, "topics.csv"))))
+    check("the topics file carries a buying-or-comparing column",
+          "buying_or_comparing" in topics_head
+          and "year_on_year_readable" in topics_head)
     check("the report names what it left out of direction",
           "left out of every statement about direction" in shape
           and "keyword research" in shape)
     check("the report says a topic is a reading of this corpus",
-          "A topic is what this run made of it" in shape)
+          "a reading of this run's searches" in shape)
 
     print("relevance")
     yes, no = judge.RELEVANCE_CRITERIA["true"], judge.RELEVANCE_CRITERIA["false"]
@@ -647,6 +666,249 @@ def offline() -> None:
     judge.adjudicate(_Adj(0.20, 0.70), ms_graph, [against], "a founder")
     check("and the rival winning still says so",
           against.verdict == "the data supports the opposite")
+
+    print("offerings")
+    up = [100 + 5 * i for i in range(48)]
+    down = [400 - 5 * i for i in range(48)]
+    months48 = [f"{y}-{m:02d}" for y in (2022, 2023, 2024, 2025)
+                for m in range(1, 13)]
+
+    def offering_market(rows_):
+        g_ = K.Graph("cad to bim", "United States", "en")
+        g_.add_rows([{"term": t, "volume": v, "cpc": c, "competition_index": 20,
+                      "low_bid": c * 0.4, "high_bid": c * 2.0,
+                      "trend": list(tr) if tr else [], "months":
+                      months48 if tr else [], "source": src}
+                     for t, v, c, _, _, _, tr, src in rows_])
+        for t, v, c, offering, job, ents, _, _ in rows_:
+            kw = g_.keywords[t]
+            kw.topic, kw.topic_confidence = "", 0.0
+            kw.job, kw.job_confidence, kw.job_certain = job, 0.9, True
+            kw.offering, kw.offering_confidence = offering, 0.9
+            kw.offering_certain = bool(offering)
+            kw.entities = list(ents)
+        return g_
+
+    cad = offering_market([
+        ("what is bim", 20000, 2.0, "information", "learn", [], up, "expanded"),
+        ("bim meaning", 10000, 1.0, "information", "learn", [], up, "expanded"),
+        ("bim guide", 5000, 3.0, "information", "learn", [], up, "site:a.com"),
+        ("bim software", 6000, 10.0, "software", "compare", [], up, "site:a.com"),
+        ("revit pricing", 2000, 8.0, "software", "buy", ["revit"], up,
+         "site:a.com"),
+        ("autodesk bim software price", 1000, 9.0, "software", "buy",
+         ["autodesk"], up, "site:a.com"),
+        ("bim modeling services", 400, 70.0, "service", "buy", [], down,
+         "site:a.com"),
+        ("revit outsourcing", 100, 170.0, "service", "buy", [], down,
+         "site:a.com"),
+        ("a mystery search", 900, 5.0, "", "learn", [], up, "expanded"),
+    ])
+    rows_by = {r["offering"]: r for r in cad.offering_rows()}
+    check("a search whose offering did not read is left out of the offerings",
+          sum(r["keywords"] for r in rows_by.values()) == 8)
+    check("shares of searching and of spend are over the same searches",
+          abs(sum(r["search_share"] for r in rows_by.values()) - 1) < 1e-3
+          and abs(sum(r["spend_share"] for r in rows_by.values()) - 1) < 1e-3)
+    check("an offering's click price is weighted by its searching",
+          abs(rows_by["service"]["click_price"] - 90.0) < 1e-6)
+    check("buying share is taken over the searches whose intent read",
+          rows_by["service"]["commercial_share"] == 1.0
+          and rows_by["information"]["commercial_share"] == 0.0)
+    check("open ground is measured among the people shopping",
+          rows_by["software"]["buyers_naming_a_company"] == round(3000 / 9000, 3)
+          and rows_by["service"]["buyers_naming_a_company"] == 0.0)
+
+    cad_claims = {c.kind: c for c in insights.generate(cad)}
+    om = cad_claims.get("offer_money")
+    check("the money contrast names the dearest offering against the crowd",
+          om is not None and om.headline == "The money is in services, "
+                                            "not information")
+    check("the table under a contrast prints the shares the sentence prints",
+          om is not None and all(
+              f"{pct_ * 100:.0f}%" in om.text or name_ not in ("information",
+                                                             "service")
+              for name_, pct_ in ((r["offering"], r["share_of_searching"])
+                                  for r in om.evidence["every_offering"])))
+    check("and its premise holds as printed",
+          om is not None and om.evidence["click_price_ratio"] > 1
+          and "more of the searching is for information" in om.assertion)
+    og = cad_claims.get("offer_growth")
+    check("the growth contrast pairs a rising offering with a falling one",
+          og is not None and og.evidence["falling"] == "service"
+          and og.evidence["growing_at"] >= 1.0 > og.evidence["falling_at"])
+    oo = cad_claims.get("offer_open")
+    check("open ground is where shoppers name no company, against the "
+          "largest shopping crowd",
+          oo is not None and oo.headline == "The open ground is in services, "
+                                            "not software")
+    big_and_dear = offering_market([
+        ("bim modeling services", 20000, 90.0, "service", "buy", [], up, "site:a"),
+        ("bim outsourcing", 10000, 80.0, "service", "buy", [], up, "site:a"),
+        ("what is bim", 5000, 2.0, "information", "learn", [], up, "site:a"),
+        ("bim meaning", 5000, 1.0, "information", "learn", [], up, "site:a")])
+    check("no money contrast when the dearest offering is also the biggest",
+          not any(c.kind == "offer_money"
+                  for c in insights.generate(big_and_dear)))
+    single = offering_market([
+        ("bim modeling services", 400, 70.0, "service", "buy", [], up, "site:a"),
+        ("what is bim", 5000, 2.0, "information", "learn", [], up, "site:a"),
+        ("bim meaning", 5000, 1.0, "information", "learn", [], up, "site:a")])
+    check("one search is not a group: no contrast rests on it",
+          not any(c.kind == "offer_money" for c in insights.generate(single)))
+    all_up = offering_market([
+        ("bim software", 6000, 10.0, "software", "compare", [], up, "site:a"),
+        ("revit pricing", 2000, 8.0, "software", "buy", [], up, "site:a"),
+        ("bim modeling services", 400, 70.0, "service", "buy", [], up, "site:a"),
+        ("revit outsourcing", 100, 170.0, "service", "buy", [], up, "site:a")])
+    check("no growth contrast when nothing is falling",
+          not any(c.kind == "offer_growth" for c in insights.generate(all_up)))
+
+    print("headlines")
+    check("a headline is the point before the numbers",
+          insights._headline("The money is concentrated: people are 5% of "
+                             "the searching") == "The money is concentrated")
+    check("with the bracketed figures taken out",
+          insights._headline("Most of this market is people trying to "
+                             "understand it (89% of 256,840 searches), ahead "
+                             "of shopping for it (5%) — but x")
+          == "Most of this market is people trying to understand it, ahead "
+             "of shopping for it")
+    check("and a price is not mistaken for a full stop",
+          insights._headline("It costs $1.49 a click. Then more")
+          == "It costs $1.49 a click")
+
+    print("the offering is asked")
+    class _AssignJev:
+        """Answers topic, job and offering Choices by rule."""
+        def __init__(self, offers_):
+            self.offers = offers_
+        def ask(self, state, questions):
+            offers_ = self.offers
+            class R:
+                usage = jev.Usage()
+                def choice(self, key):
+                    kind_, i = key.split(":")
+                    if kind_ == "offer":
+                        pick = offers_[int(i)]
+                        probs = {pick: 0.9, judge.NONE: 0.1}
+                    elif kind_ == "job":
+                        pick, probs = "learn", {"learn": 0.9, "buy": 0.1}
+                    else:
+                        pick, probs = judge.NONE, {judge.NONE: 1.0}
+                    return type("C", (), {"choice": pick, "probabilities": probs,
+                                          "confidence": 0.9})()
+            return R()
+    probe_kws = [K.Keyword("bim modeling services", 390, 71.0),
+                 K.Keyword("revit login", 900, 1.0)]
+    judge.assign(_AssignJev(["service", judge.NONE]), cad, probe_kws, "a founder")
+    check("assign reads the offering beside the topic and the job",
+          probe_kws[0].offering == "service" and probe_kws[0].offering_certain)
+    check("none of these is kept as no offering, not forced into one",
+          probe_kws[1].offering == "" and not probe_kws[1].offering_certain)
+
+    print("invented giants")
+    giant_market = [
+        K.Keyword("how to drawings", 301000, 3.19, source="priced"),
+        K.Keyword("bim", 22200, 15.0, source="site:marsbim.com"),
+        K.Keyword("revit", 40500, 7.6, source="site:tejjy.com"),
+        K.Keyword("bim software", 6600, 13.0, source="expanded")]
+    gstub = _StubJev(lambda term: False)
+    gone, st = judge.invented_giants(gstub, cad, giant_market, "a founder")
+    check("an invented search larger than anything harvested is asked about",
+          gstub.asked == ["how to drawings"] and gone == ["how to drawings"])
+    check("and the fact reaches Jev as words, never as numbers",
+          not any(ch.isdigit() for ch in judge.INVENTED_MEASURED))
+    hstub = _StubJev(lambda term: False)
+    judge.invented_giants(hstub, cad, [k for k in giant_market
+                                       if k.source.startswith("site:")],
+                          "a founder")
+    check("a harvested search is never asked by this rule", hstub.asked == [])
+    nstub = _StubJev(lambda term: False)
+    gone, st = judge.invented_giants(nstub, cad, [
+        K.Keyword("sourdough starter", 301000, 1.0, source="expanded"),
+        K.Keyword("sourdough recipe", 90000, 1.0, source="expanded")],
+        "a baker")
+    check("with nothing harvested there is nothing to compare against",
+          nstub.asked == [] and gone == [] and st.questions == 0)
+    kstub = _StubJev(lambda term: True)
+    gone, _ = judge.invented_giants(kstub, cad, [
+        K.Keyword("sourdough starter", 301000, 1.0, source="expanded"),
+        K.Keyword("sourdough starter kit", 9000, 20.0, source="site:a.com")],
+        "a baker")
+    check("the market's own name survives being that large",
+          kstub.asked == ["sourdough starter"] and gone == [])
+
+    print("the ranked report")
+    ranked_claims = [c for c in insights.generate(cad)
+                     if c.kind in ("offer_money", "offer_growth", "offer_open")]
+    for c, w in zip(ranked_claims, (0.2, 0.7, 0.1)):
+        c.verdict, c.weight, c.stakes_label = "kept", w, "A choice"
+    failed = judge.Claim(key="x|y", text="Something that did not hold.",
+                         assertion="a", forbids="b", evidence={}, examples=[],
+                         kind="thin", verdict="misread")
+    ranked_md = report.render(cad, ranked_claims + [failed], [], man,
+                              "/tmp/x/cad-to-bim-data")
+    heads = [line for line in ranked_md.splitlines() if line.startswith("## ")]
+    by_weight = sorted(ranked_claims, key=lambda c: -c.weight)
+    check("insights are ranked by their value weight, best first",
+          heads == [f"## {i}. {c.headline}" for i, c in
+                    enumerate(by_weight, 1)])
+    check("a statement that failed is not in the report",
+          "Something that did not hold" not in ranked_md
+          and "1 other statement the data could support was tested" in ranked_md)
+    check("each offering insight shows only its own columns",
+          "| wants | searches/mo | year on year |" in ranked_md
+          and "| wants | shopping searches/mo | of them naming a company |"
+          in ranked_md)
+    check("the data folder is named by where it sits",
+          "`cad-to-bim-data/tested.csv`" in ranked_md)
+    quiet_md = report.render(cad, [failed], [], man, "d")
+    check("with nothing kept the report says so and stops",
+          "## No insights" in quiet_md and "## 1." not in quiet_md
+          and "None of the 1 statement this data could support" in quiet_md)
+    empty_md = report.render(K.Graph("nothing here"), [], [], man, "d")
+    check("and says so when there was nothing to test at all",
+          "There was nothing to test" in empty_md)
+
+    print("the data files")
+    cad.keywords["bim modeling services"].term  # noqa: B018
+    comma = K.Keyword('bim "services", nyc', 10, 5.0, trend=[1, 2],
+                      months=["2025-01", "2025-02"], source="site:a.com")
+    cad.keywords[comma.term] = comma
+    with tempfile.TemporaryDirectory() as tmp:
+        files = report.write_data(tmp, cad, ranked_claims + [failed],
+                                  threads[:2], dict(man, forecast={"bid": 12}))
+        names = sorted(os.path.basename(f) for f in files)
+        kw_rows = list(csv.DictReader(open(os.path.join(tmp, "keywords.csv"))))
+        tested = list(csv.DictReader(open(os.path.join(tmp, "tested.csv"))))
+        series_rows = list(csv.reader(open(os.path.join(tmp, "series.csv"))))
+        trail_rows = list(csv.reader(open(os.path.join(tmp, "trail.csv"))))
+        offer_rows = list(csv.DictReader(open(os.path.join(tmp, "offerings.csv"))))
+        net = json.load(open(os.path.join(tmp, "network.json")))
+    check("every data file is written",
+          names == sorted(["keywords.csv", "series.csv", "topics.csv",
+                           "offerings.csv", "tested.csv", "trail.csv",
+                           "network.json", "forecast.json", "run.json"]))
+    check("one row per keyword, with its three axes",
+          len(kw_rows) == len(cad.keywords)
+          and {"about", "wants", "answer"} <= set(kw_rows[0]))
+    check("a term with commas and quotes survives the round trip",
+          any(r["term"] == 'bim "services", nyc' for r in kw_rows))
+    check("one row per statement tested, with the verdict and why",
+          len(tested) == len(ranked_claims) + 1
+          and any(r["verdict"] == "misread" and r["why"] for r in tested))
+    check("the ranking is carried into the tested file",
+          [r["rank"] for r in tested[:3]] == ["1", "2", "3"])
+    check("one row per keyword-month in the series",
+          len(series_rows) - 1 == sum(len(k.trend) for k in cad.keywords.values()))
+    check("one row per thread in the trail",
+          len(trail_rows) - 1 == len(threads[:2]))
+    check("one row per offering",
+          sorted(r["offering"] for r in offer_rows)
+          == sorted(r["offering"] for r in cad.offering_rows()))
+    check("the network file says its calibration is unverified",
+          "unverified" in net["what_this_is"])
 
     print("question shapes")
     try:

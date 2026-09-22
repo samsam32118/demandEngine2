@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import statistics
 from collections import Counter
 from dataclasses import dataclass
@@ -140,9 +141,189 @@ def _examples(keywords: Sequence[K.Keyword], limit: int = 6) -> list[str]:
     return [f"{k.term} ({n(k.volume)}/mo, {usd(k.cpc)} a click)" for k in top]
 
 
+def money0(value: float) -> str:
+    """Whole units, for monthly totals: "$308 a month", not "$308.00"."""
+    return f"{_CURRENCY}{value:,.0f}"
+
+
+def _headline(text: str) -> str:
+    """The claim's own opening clause — the point a reader scans for.
+
+    Findings are written "<the point>: <the numbers>", so the point is what
+    comes before the first colon, dash, semicolon or full stop, with any
+    bracketed figures taken out. Families whose opening clause is not the
+    point pass their headline explicitly.
+    """
+    cuts = [i for i in (text.find(sep) for sep in (": ", " — ", "; ", ". "))
+            if i > 0]
+    head = text[:min(cuts)] if cuts else text
+    return re.sub(r"\s*\([^)]*\)", "", head).strip().rstrip(".")
+
+
 # --------------------------------------------------------------------------
 # Generation
 # --------------------------------------------------------------------------
+
+def _offering_contrasts(graph: K.Graph, add) -> None:
+    """Contrasts across what people want to end up with. See the comment."""
+    # ---- where is the value, by what people want to end up with? --------
+    #
+    # "The money is in services, not software" was the most useful thing said
+    # about `cad to bim`, and it was said by hand after the run: the skill
+    # could not see it, because someone shopping for a firm to do the work
+    # and someone shopping for a tool to do it themselves were the same
+    # searcher to it. The offering axis separates them, and these families
+    # state the contrasts a person draws first — where the money is, where
+    # the buyers are, where the growth is, where nobody has been picked.
+    #
+    # Code picks the pair and checks the sentence's own premise holds as
+    # printed (it-21: `gradient` and `money_seat` said things their own
+    # numbers contradicted). Whether a contrast matters is the tests' call,
+    # and where it ranks is the reader question in `judge.rank`. A group
+    # needs two searches: one search describes itself, not a group.
+    offers = [r for r in graph.offering_rows() if r["keywords"] >= 2]
+
+    def noun(row: dict) -> str:
+        return K.OFFERING_NOUNS[row["offering"]]
+
+    def offer_table() -> list[dict]:
+        return [{"offering": r["offering"], "searches": r["volume"],
+                 # Unrounded, so the table prints what the sentence prints:
+                 # rounding to three places first showed 76% under a
+                 # sentence that said 77%.
+                 "share_of_searching": r["search_share"],
+                 "share_of_ad_spend": r["spend_share"],
+                 "click_price": r["click_price"],
+                 "buying_or_comparing": r["commercial_share"],
+                 "names_a_company": r["branded_share"],
+                 "shopping_searches": r["buying_volume"],
+                 "shoppers_naming_a_company": r["buyers_naming_a_company"],
+                 "year_on_year": (r["growth"] if r["growth_readable"]
+                                  else None)}
+                for r in offers]
+
+    def offer_examples(*picks: tuple[dict, str]) -> list[str]:
+        seen: list[K.Keyword] = []
+        for row, key in picks:
+            for term, _, _ in row[key]:
+                kw = graph.keywords.get(term)
+                if kw is not None and kw not in seen:
+                    seen.append(kw)
+        return [f"{k.term} ({n(k.volume)}/mo, {usd(k.cpc)} a click)"
+                for k in seen[:6]]
+
+    if len(offers) >= 2:
+        # Where a search is worth the most, against where most searching is.
+        dear = max(offers, key=lambda r: (r["click_price"], r["volume"]))
+        crowd = max((r for r in offers if r is not dear),
+                    key=lambda r: (r["volume"], r["offering"]))
+        if (dear["click_price"] > crowd["click_price"]
+                and usd(dear["click_price"]) != usd(crowd["click_price"])
+                and crowd["search_share"] > dear["search_share"]
+                and dear["spend_share"] > dear["search_share"]
+                and pct(dear["spend_share"]) != pct(dear["search_share"])):
+            a, b = noun(dear), noun(crowd)
+            ratio = dear["click_price"] / max(crowd["click_price"], 0.01)
+            add("market|offer_money",
+                f"The money is in {a}, not {b}: people looking for {a} are "
+                f"{pct(dear['search_share'])} of the searching but "
+                f"{pct(dear['spend_share'])} of the ad spend, at "
+                f"{usd(dear['click_price'])} a click — {ratio:.1f}x the "
+                f"{usd(crowd['click_price'])} paid for people looking for "
+                f"{b}, who are {pct(crowd['search_share'])} of the "
+                f"searching.",
+                f"Advertisers here pay far more to reach people looking for "
+                f"{a} than people looking for {b}, though more of the "
+                f"searching is for {b}.",
+                f"Advertisers here value people looking for {a} and people "
+                f"looking for {b} about the same, and the spend follows the "
+                f"searching.",
+                {"money_is_in": dear["offering"], "not_in": crowd["offering"],
+                 "click_price_ratio": round(ratio, 2),
+                 "priciest_terms": [t for t, _, _ in dear["priciest"]],
+                 "every_offering": offer_table()},
+                offer_examples((dear, "priciest"), (crowd, "largest")),
+                "", "offer_money", headline=f"The money is in {a}, not {b}")
+
+        # There is no "the buyers are in A, not B" here, though it was built
+        # and measured: someone looking for a firm to do the work is nearly
+        # always hiring, and someone looking for information nearly always
+        # learning, so the contrast restates how the offering and job axes
+        # overlap rather than anything about this market. Fair reading
+        # rejected it at 0.30 on `cad to bim` (it-22).
+
+        # Where searching is rising, against where it is falling — only on
+        # series that can carry a direction at all (it-20).
+        moving = [r for r in offers
+                  if r["growth"] is not None and r["growth_readable"]]
+        if len(moving) >= 2:
+            up = max(moving, key=lambda r: (r["growth"], r["volume"]))
+            down = min(moving, key=lambda r: (r["growth"], -r["volume"]))
+            if round(up["growth"], 2) >= 1.0 > round(down["growth"], 2):
+                a, b = noun(up), noun(down)
+                add("market|offer_growth",
+                    f"The growth is in {a}, not {b}: searches for {a} ran at "
+                    f"{up['growth']:.2f}x the year before, and searches for "
+                    f"{b} at {down['growth']:.2f}x.",
+                    f"Searching for {a} is rising while searching for {b} "
+                    f"is falling.",
+                    f"Searching for {a} and searching for {b} are moving the "
+                    f"same way.",
+                    {"growing": up["offering"], "growing_at": up["growth"],
+                     "falling": down["offering"],
+                     "falling_at": down["growth"],
+                     "every_offering": offer_table()},
+                    offer_examples((up, "largest"), (down, "largest")),
+                    "", "offer_growth",
+                    headline=f"The growth is in {a}, not {b}")
+
+        # Where the people shopping have not picked a supplier, against
+        # where they have. "Open ground" means buyers with no supplier in
+        # mind, so it is measured among the buyers: brand share over the
+        # searches of people buying, comparing or looking for a supplier.
+        # Measured over all searching instead, it named information — 4%
+        # branded, 1% buying — the open ground of `cad to bim`: unclaimed
+        # because unwanted, it-20's mistake at a new level. A premise check
+        # that the open side "has buyers as printed" let 1% through; the
+        # fix was to measure the thing the sentence is about (it-22).
+        shopped = [r for r in offers if r["buying_keywords"] >= 2
+                   and r["buyers_naming_a_company"] is not None]
+        if len(shopped) >= 2:
+            # Against where the shopping is, as the money contrast is set
+            # against where the searching is. Picking the most-branded
+            # offering instead set services against 200 shopping searches
+            # for information, a comparison with nothing behind it.
+            free = min(shopped, key=lambda r: (r["buyers_naming_a_company"],
+                                               -r["buying_volume"]))
+            closed = max((r for r in shopped if r is not free),
+                         key=lambda r: (r["buying_volume"], r["offering"]))
+            if (closed is not free
+                    and closed["buyers_naming_a_company"]
+                    > free["buyers_naming_a_company"]
+                    and pct(closed["buyers_naming_a_company"])
+                    != pct(free["buyers_naming_a_company"])):
+                a, b = noun(free), noun(closed)
+                add("market|offer_open",
+                    f"The open ground is in {a}, not {b}: of the people "
+                    f"shopping, {pct(free['buyers_naming_a_company'])} of "
+                    f"those looking for {a} name a company, against "
+                    f"{pct(closed['buyers_naming_a_company'])} of those "
+                    f"looking for {b} ({n(free['buying_volume'])} and "
+                    f"{n(closed['buying_volume'])} shopping searches a "
+                    f"month).",
+                    f"People shopping for {a} have not settled on a "
+                    f"supplier, while people shopping for {b} already name "
+                    f"theirs.",
+                    f"People shopping for {a} and people shopping for {b} "
+                    f"are about equally settled on their suppliers.",
+                    {"open": free["offering"], "settled": closed["offering"],
+                     "least_branded_share": free["buyers_naming_a_company"],
+                     "most_branded_share": closed["buyers_naming_a_company"],
+                     "every_offering": offer_table()},
+                    offer_examples((free, "largest"), (closed, "largest")),
+                    "", "offer_open",
+                    headline=f"The open ground is in {a}, not {b}")
+
 
 def generate(graph: K.Graph) -> list[Claim]:
     """One claim per pattern, stated about the market and naming its extremes.
@@ -171,13 +352,10 @@ def generate(graph: K.Graph) -> list[Claim]:
     for kw in graph.certain:
         if kw.topic and kw.topic not in ("", "none"):
             by_topic.setdefault(kw.topic, []).append(kw)
-    if not by_topic:
-        return claims
-
     market_price = graph.market_click_price
     total_money = graph.total_money
     ranked = sorted(by_topic, key=lambda t: -rows.get(t, {}).get("volume", 0))
-    top_examples = _examples(by_topic[ranked[0]])
+    top_examples = _examples(by_topic[ranked[0]]) if ranked else []
 
     # How much searching the whole reading rests on. Carried into every
     # claim's measurements, because a reader — and a judge — cannot tell a
@@ -189,10 +367,18 @@ def generate(graph: K.Graph) -> list[Claim]:
              "monthly_searches_this_rests_on": graph.certain_volume}
 
     def add(key, text, assertion, rival, evidence, examples, topic="",
-            kind=""):
+            kind="", headline=""):
         claims.append(Claim(key=key, text=text, assertion=assertion,
                             forbids=rival, evidence={**evidence, **basis},
-                            examples=examples, topic=topic, kind=kind))
+                            examples=examples, topic=topic, kind=kind,
+                            headline=headline or _headline(text)))
+
+    # The offering axis does not rest on topics, so a market in which no
+    # topic was confirmed still gets its contrasts. They used to sit below
+    # this return, and the selftest's topic-less fixture found them silent.
+    if not by_topic:
+        _offering_contrasts(graph, add)
+        return claims
 
     # ---- is there anything here at all? ---------------------------------
     #
@@ -580,6 +766,48 @@ def generate(graph: K.Graph) -> list[Claim]:
              "click_price_of_self_serve": round(K.click_price(ss_kws), 2)},
             _examples(ss_kws), worst, "selfserve")
 
+    _offering_contrasts(graph, add)
+
+    # ---- which topic is the growth moving to? ---------------------------
+    #
+    # `direction` says which way the market is going and lists exceptions;
+    # this names the contrast a person acts on: the biggest topic that is
+    # rising against the biggest one that is falling. On the AnswerThePublic
+    # space that was "tools for seo" at 1.40x against "keyword research
+    # tools" at 0.38x — the same product, and only one of its names is
+    # dying. Found by hand, like the services contrast.
+    readable = [t for t in ranked if rows.get(t, {}).get("growth") is not None
+                and rows[t].get("growth_readable")]
+    rising = [t for t in readable if round(rows[t]["growth"], 2) >= 1.0]
+    falling = [t for t in readable if round(rows[t]["growth"], 2) < 1.0]
+    if rising and falling:
+        ta = max(rising, key=lambda t: (rows[t]["volume"], t))
+        tb = max(falling, key=lambda t: (rows[t]["volume"], t))
+        ra, rb = rows[ta], rows[tb]
+        add("market|topic_growth",
+            f"The growth is in \u201c{ta}\u201d, not \u201c{tb}\u201d: "
+            f"searching for \u201c{ta}\u201d ({n(ra['volume'])} a month) ran "
+            f"at {ra['growth']:.2f}x the year before, and for "
+            f"\u201c{tb}\u201d ({n(rb['volume'])} a month) at "
+            f"{rb['growth']:.2f}x.",
+            f"Searching for \u201c{ta}\u201d is rising while searching for "
+            f"\u201c{tb}\u201d is falling.",
+            f"Searching for \u201c{ta}\u201d and for \u201c{tb}\u201d moves "
+            f"together.",
+            {"growing": {"topic": ta, "searches": ra["volume"],
+                         "year_on_year": ra["growth"]},
+             "falling": {"topic": tb, "searches": rb["volume"],
+                         "year_on_year": rb["growth"]},
+             "also_rising": [f"{t} {rows[t]['growth']:.2f}x"
+                             for t in rising if t != ta][:4],
+             "also_falling": [f"{t} {rows[t]['growth']:.2f}x"
+                              for t in falling if t != tb][:4]},
+            _examples(sorted(by_topic[ta], key=lambda k: -k.volume)[:3]
+                      + sorted(by_topic[tb], key=lambda k: -k.volume)[:3]),
+            ta, "topic_growth",
+            headline=f"The growth is in \u201c{ta}\u201d, not "
+                     f"\u201c{tb}\u201d")
+
     # ---- is there a season? ---------------------------------------------
     seasonal = [(t, rows[t]["seasonality"]) for t in ranked
                 if rows.get(t, {}).get("seasonality") is not None]
@@ -708,6 +936,20 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
             keep = ev.get("ratio", 0) >= C["cell_premium"]
         elif kind == "gradient":
             keep = ev.get("cpc_ratio", 0) >= C["gradient_lift"]
+        elif kind == "offer_money":
+            keep = ev.get("click_price_ratio", 0) >= C["cpc_spread"]
+        elif kind == "offer_growth":
+            keep = (ev.get("growing_at", 1.0) >= C["growth_up"]
+                    or ev.get("falling_at", 1.0) <= C["growth_down"])
+        elif kind == "topic_growth":
+            keep = (ev.get("growing", {}).get("year_on_year", 1.0)
+                    >= C["growth_up"]
+                    or ev.get("falling", {}).get("year_on_year", 1.0)
+                    <= C["growth_down"])
+        elif kind == "offer_open":
+            keep = (ev.get("most_branded_share", 0.0) >= C["branded_share_high"]
+                    and ev.get("least_branded_share", 1.0)
+                    <= C["branded_share_low"])
         claim.verdict = "kept" if keep else "below threshold"
         # Rank proxy: how much of the market the claim speaks for.
         claim.weight = K.share(row.get("volume", ev.get("cell_searches", 0)
@@ -921,6 +1163,19 @@ def followups(graph: K.Graph, claims: Sequence[Claim],
                 f"keep going as the audience gets more specific?",
                 "price", _probe_terms(graph, topic, FACET_SETS["segment"],
                                       known, 900), "segment")
+        elif kind == "offer_money":
+            a = K.OFFERING_NOUNS.get(ev.get("money_is_in", ""), "it")
+            add(claim,
+                f"The money is in {a} — what else do the people looking for "
+                f"{a} search for?",
+                "expand", (ev.get("priciest_terms") or [])[:K_MAX_SEEDS],
+                "offer")
+        elif kind == "topic_growth":
+            add(claim,
+                f"One part of this market is rising while another falls — "
+                f"what is inside each?",
+                "expand", [ev.get("growing", {}).get("topic", ""),
+                           ev.get("falling", {}).get("topic", "")], "movers")
 
     # De-duplicate: two findings often raise the same question, and paying
     # twice for one answer is the waste this whole loop exists to avoid.
