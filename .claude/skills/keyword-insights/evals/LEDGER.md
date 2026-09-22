@@ -929,3 +929,56 @@ wrong.
 Suite unchanged at 18/18 jev, selftest 69/69. The cost of the extra
 judgment is real but small: Jev per run went from $0.051 to $0.039 here,
 because vetting earlier means judging a smaller corpus later.
+
+---
+
+## it-18 — a set that was written, read, and never added to
+
+`self.chased` is initialised in the constructor and read in three places,
+all of them filtering out threads already followed. Nothing ever put
+anything in it. The only memory the loop had was `dead_tags`, populated on
+a dead end — so a question that *paid off* was regenerated next iteration
+and bought again.
+
+On `cad to bim tool` at effort 5 the trail reads:
+
+```
+[paid_off] These searchers already name their suppliers — are they still choosing
+[dead_end] These searchers already name their suppliers — are they still choosing
+[paid_off] People are trying to avoid paying — what are they reaching for instead
+[paid_off] People are trying to avoid paying — what are they reaching for instead
+[paid_off] People are trying to avoid paying — what are they reaching for instead
+[paid_off] People are trying to avoid paying — what are they reaching for instead
+[paid_off] People are trying to avoid paying — what are they reaching for instead
+```
+
+Five of eight iterations on one question, three of them byte-identical
+replays served from cache. The backtracking machinery was working
+perfectly and the loop had no way to remember success.
+
+**And an empty sample was being judged.** The last three of those probes
+returned 17 rows, all 17 dropped by the relevance filter (it-17), leaving
+nothing — and `assess_probe` was asked whether that nothing bore on the
+question. It answered `P=0.51`, a coin flip that reads as "answered",
+which kept the thread alive to be bought again. A probe whose entire yield
+is off-market is a dead end by definition; it no longer costs a question
+to find that out.
+
+| | before | after |
+|---|---:|---:|
+| probes bought | 7 | **2** |
+| keywords | 663 | 663 |
+| coverage | 56% | 56% |
+| findings | 6 | 6 |
+| DataForSEO | $0.599 | $0.294 |
+
+Identical corpus, identical findings, five fewer probes. The extra five
+bought nothing, which is the cleanest possible evidence they should never
+have been bought.
+
+Suite 18/18 jev, 17/18 code, selftest 69/69 — unchanged, because no eval
+case ran long enough to repeat a thread. Two cases stop at 2 iterations
+and the third stops on the bits floor, so the defect was invisible to the
+suite and only appeared at effort 5 on a market with a long tail of
+follow-ups. That is an argument for running the eval cases at a high
+effort occasionally, not for trusting a green suite.

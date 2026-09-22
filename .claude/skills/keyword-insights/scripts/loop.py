@@ -571,6 +571,14 @@ class Run:
                 break
 
             thread.status = "chasing"
+            # `chased` was written, read in three places, and never added
+            # to. Nothing else stops a thread being regenerated next
+            # iteration, so a question that *paid off* came back and was
+            # bought again: on `cad to bim tool` the same probe was bought
+            # five times in a row, three of them byte-identical replays,
+            # burning five of eight iterations on one question. Only a
+            # dead end was ever remembered, through `dead_tags`.
+            self.chased.add(thread.key)
             self.trail.append(thread)
             self.say(f"  ACT      {thread.question}")
             try:
@@ -593,8 +601,20 @@ class Run:
             # small measurement had visibly moved a whole market — which it
             # never has, so every probe read as a dead end.
             returned = self.sample(fresh)
-            paid, st = judge.assess_probe(self.client, self.graph,
-                                          thread.question, returned, a.asker)
+            if not returned:
+                # Nothing survived vetting, so there is nothing to judge.
+                # Asking "did this bear on the question?" about an empty
+                # sample is not a question, and it was answered `P=0.51`
+                # — a coin flip promoted to "answered", which kept the
+                # thread alive and bought it again.
+                paid = False
+                st = judge.Stage("assess", 0, jev.Usage(),
+                                 ["nothing it brought back is in this "
+                                  "market — no sample to judge"])
+            else:
+                paid, st = judge.assess_probe(self.client, self.graph,
+                                              thread.question, returned,
+                                              a.asker)
             self.stage(st)
             thread.status = "paid_off" if paid else "dead_end"
             insights.record_probe(thread.key.rsplit("->", 1)[-1], paid)
