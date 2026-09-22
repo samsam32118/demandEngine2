@@ -22,6 +22,7 @@ from __future__ import annotations
 import json
 import math
 import re
+import statistics
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field, asdict
 from typing import Iterable, Sequence
@@ -215,24 +216,45 @@ def growth(trend: Sequence[int]) -> float | None:
     The fix was not arithmetic. It was asking DataForSEO for the history it
     gives away free: `date_from` returns forty-eight months for the price of
     twelve. See `seo.history_start`.
+
+    **Each window is compared by its median month, not its total.** Google
+    Keyword Planner emits occasional single-month spikes and DataForSEO
+    passes them through verbatim: `keyword research` sits between 6k and 14k
+    for thirty-three months, then reads 301k, 1.5M and 1.83M in three
+    consecutive ones. A ratio of sums has no defence against that — those
+    three months land in the denominator and report the market at 0.29x,
+    a 71% collapse, while the typical month was going up. A ratio of medians
+    answers the same question and cannot be moved by fewer than six bad
+    months in a window.
+
+    Measured across 754 keywords at 1,000+/mo drawn from four markets: 9%
+    carry a month at 10x their own median, 3% at 50x, and on the largest
+    terms the two methods disagree about the *direction* of the year —
+    `keyword research` 0.29x against 3.42x, `content marketing` 0.32x
+    against 2.96x, `ai influencer generator` 90.13x against 0.77x. The
+    median is not a refinement here; it is the difference between a true
+    statement and a false one.
     """
     if len(trend) < 24:
         return None
-    recent = sum(trend[-12:])
-    prior = sum(trend[-24:-12])
+    recent = statistics.median(trend[-12:])
+    prior = statistics.median(trend[-24:-12])
     if prior <= 0:
         return None
     return recent / prior
 
 
 def long_growth(trend: Sequence[int]) -> float | None:
-    """The latest year against the earliest one in the window."""
+    """The latest year against the earliest one in the window.
+
+    Median months, for the reason given in `growth`.
+    """
     if len(trend) < 24:
         return None
-    first = sum(trend[:12])
+    first = statistics.median(trend[:12])
     if first <= 0:
         return None
-    return sum(trend[-12:]) / first
+    return statistics.median(trend[-12:]) / first
 
 
 def years_of_history(trend: Sequence[int]) -> int:
@@ -257,7 +279,19 @@ def seasonality(trend: Sequence[int], months: Sequence[str] = ()) -> float | Non
 
 def _by_calendar_month(trend: Sequence[int],
                        months: Sequence[str] = ()) -> list[float]:
-    """Twelve figures, each averaged over every year in the window."""
+    """Twelve figures, one per calendar month, across every year available.
+
+    The figure for each month is the **median** of that month across years,
+    not the mean. A season is a shape that repeats; a single spiked
+    September is not a season, and a mean lets one of them name the peak
+    month for the whole market. Same defect as `growth`, same fix.
+
+    This needs three or more years to bite: the median of two observations
+    is their mean, so on a two-year window a lone spike still names the
+    peak. Every call asks for four (`seo.history_start`), which is where
+    the guarantee comes from — it is a property of the request, not of this
+    function, so do not shorten that window without revisiting this.
+    """
     buckets: dict[int, list[int]] = {}
     for i, value in enumerate(trend):
         if months and i < len(months):
@@ -268,7 +302,7 @@ def _by_calendar_month(trend: Sequence[int],
         else:
             key = i % 12 + 1
         buckets.setdefault(key, []).append(value)
-    return [sum(v) / len(v) for _, v in sorted(buckets.items())]
+    return [statistics.median(v) for _, v in sorted(buckets.items())]
 
 
 def peak_month(trend: Sequence[int], months: Sequence[str]) -> str:

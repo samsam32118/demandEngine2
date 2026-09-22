@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import json
 import os
+import statistics
 from collections import Counter
 from dataclasses import dataclass
 from typing import Sequence
@@ -231,9 +232,15 @@ def generate(graph: K.Graph) -> list[Claim]:
     trended = [(t, rows[t]["growth"]) for t in ranked
                if rows.get(t, {}).get("growth") is not None]
     if trended:
-        recent = sum(sum(K.weighted_trend(by_topic[t])[-12:])
+        # The median month of each topic, added up across topics — the same
+        # defence `K.growth` makes one level down. Summing months here
+        # instead would let a single spiked month in one topic set the
+        # direction reported for the whole market, which is how this market
+        # came to be described as shrinking to 0.41x while the typical month
+        # in it was flat.
+        recent = sum(statistics.median(K.weighted_trend(by_topic[t])[-12:])
                      for t, _ in trended)
-        prior = sum(sum(K.weighted_trend(by_topic[t])[-24:-12])
+        prior = sum(statistics.median(K.weighted_trend(by_topic[t])[-24:-12])
                     for t, _ in trended)
         overall = (recent / prior) if prior else 1.0
         rising = sorted([x for x in trended if x[1] >= 1.0],

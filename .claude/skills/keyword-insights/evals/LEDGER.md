@@ -982,3 +982,83 @@ and the third stops on the bits floor, so the defect was invisible to the
 suite and only appeared at effort 5 on a market with a long tail of
 follow-ups. That is an argument for running the eval cases at a high
 effort occasionally, not for trusting a green suite.
+
+---
+
+## it-19 — the year-on-year was reading Keyword Planner's spikes
+
+Running the AnswerThePublic space at effort 5 across four seeds, two runs
+disagreed about the same topic: `seo optimization tools` read **2.39x** in
+one and **0.44x** in the other. Topic membership explained it — a topic is
+a cluster mined from whatever that run harvested, and the second corpus had
+also picked up `seo optimisation tools` at 110,000/mo, which doubled the
+group and dragged its weighted series. So topic-level growth is a property
+of the corpus, not of the phrase, and two runs are entitled to differ.
+
+Dropping to the keyword level to get a stable number turned up something
+worse. Keyword series agree across runs exactly (234/234 identical terms,
+byte for byte), but the series themselves carry spikes:
+
+```
+keyword research (90,500/mo), 48 months as DataForSEO returns them
+  2022-09 →    8k  8k  8k  8k  8k  8k  9k  9k  9k  6k  6k  8k
+  2023-09 →    8k  8k  8k  6k  8k  6k  8k  8k  8k  6k  6k  6k
+  2024-09 →    6k  9k  8k 14k  9k  8k  9k 12k 12k 301k 1500k 1830k
+  2025-09 →   74k  8k  2k  1k  2k  4k 15k 60k 450k 201k 135k 135k
+```
+
+Thirty-three months between 6k and 15k, then three at 301k, 1.5M and 1.83M.
+Verified against the raw cached response: the spikes are in Google's data
+and DataForSEO passes them through. The parser was correct.
+
+`growth()` compared the **sum** of each twelve-month window. Those three
+months sit in the denominator, so it reported `keyword research` at
+**0.29x** — demand down 71% — when the median month had gone *up*. Every
+"this market is shrinking" headline in four reports rested on this.
+
+| | sum of window | median of window |
+|---|---:|---:|
+| `keyword research` | 0.29x | **3.42x** |
+| `content marketing` | 0.32x | **2.96x** |
+| `ai influencer generator` | 90.13x | **0.77x** |
+| `seo tips` | 26.20x | **3.40x** |
+
+The direction inverts on the largest terms in the market. Across 754
+keywords at 1,000+/mo drawn from four markets, 9% carry a month at 10x
+their own median and 3% at 50x.
+
+**Fix:** compare the median month of each window, in `growth`,
+`long_growth`, the market-wide roll-up in `insights`, and
+`_by_calendar_month` behind seasonality and `peak_month`. A median cannot
+be moved by fewer than six bad months out of twelve.
+
+It needs **three or more years to bite** — the median of two observations
+is their mean, so on a two-year window a lone spike still names the peak
+month. Every call already asks for four (`seo.history_start`), so the
+guarantee comes from the shape of the request, not from the function. A
+selftest check pins that, and the docstring says not to shorten the window
+without revisiting it. Writing the test wrong is how the limit was found:
+the first version used two years and failed.
+
+| | before | after |
+|---|---:|---:|
+| selftest | 69/69 | **73/73** |
+| evals, jev arm | 18/18 | **18/18** |
+| evals, code arm | 17/18 | **16/18** |
+
+**The code arm got worse and is staying that way.** Its constants
+(`growth_up: 1.30`, `growth_down: 0.77`, `seasonality: 2.00`) were
+hand-tuned while the inputs were contaminated, so correcting the inputs
+moved values across fixed thresholds and it now keeps 90% of claims
+instead of 86%. Re-tuning them would be fitting the control to the data it
+exists to be a control for. The judgment arm did not move, which is the
+result worth having: the thing that reads a number against a stated
+criterion survived a change in the number, and the thing that compares it
+to a constant did not.
+
+**What it cost to find:** four effort-5 runs, $1.93 of DataForSEO. The
+defect was invisible to the eval suite because every case runs on small
+cached corpora whose keywords have no spikes, and invisible to five
+previous market reports because a plausible-looking decline is exactly
+what a reader expects from this category. It took two runs of the *same*
+market disagreeing with each other to surface it.

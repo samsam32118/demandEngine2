@@ -73,6 +73,30 @@ def offline() -> None:
           K.growth([10] * 12) is None)
     check("two complete cycles do yield one",
           abs(K.growth([10] * 12 + [20] * 12) - 2.0) < 1e-9)
+    # One Keyword Planner spike must not decide the year. This series is
+    # `keyword research` as DataForSEO actually returns it: years at 6-14k,
+    # then 301k/1.5M/1.83M in the prior window. Summing reads 0.29x — a 71%
+    # collapse that never happened.
+    spiked = ([8100] * 12
+              + [6600, 9900, 8100, 14800, 9900, 8100,
+                 9900, 12100, 12100, 301000, 1500000, 1830000]
+              + [74000, 8100, 2400, 1000, 2400, 3600,
+                 14800, 60500, 450000, 201000, 135000, 135000])
+    check("three spiked months do not flip the direction of the year",
+          K.growth(spiked) > 1.0)
+    check("a spiked window is read by its median month",
+          abs(K.growth(spiked) - (37650.0 / 11000.0)) < 1e-6)
+    # Four years is what `date_from` actually returns, and four
+    # observations per calendar month is what makes the median bite: with
+    # only two years the median of two values is their mean and a single
+    # spike still names the peak. See `_by_calendar_month`.
+    four_years = ([10] * 8 + [99999] + [10] * 3) + [10] * 36
+    labels = [f"{y}-{m:02d}" for y in (2023, 2024, 2025, 2026)
+              for m in range(1, 13)]
+    check("one odd September does not become the peak month",
+          K.peak_month(four_years, labels) != "September")
+    check("a spike survives as a spike, not as a season",
+          K.seasonality(four_years, labels) == 1.0)
     check("the season cancels between matched cycles",
           abs(K.growth(([1, 9] * 6) * 2) - 1.0) < 1e-9)
     check("every call asks for four years of history",
