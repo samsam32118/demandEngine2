@@ -278,3 +278,53 @@ presence of numbers.
 | code checks | 7/9 | 8/9 |
 | jev kept_share | 0.27 | 0.24 |
 | distinct hypotheses per price probe | ~500 | **~1000** |
+
+---
+
+## it-10 — the growth figure was not unmeasurable, I was asking wrong
+
+it-9 removed the `direction` family on the grounds that twelve months cannot
+separate a trend from a season. That reasoning was right and the conclusion
+was wrong, and the baseline run found out why: **`date_from` makes
+DataForSEO return forty-eight months of history for the same $0.09 it
+charges for twelve.** The data was there the whole time and this skill never
+asked for it.
+
+So growth comes back, computed honestly: **the last twelve months against
+the twelve before them.** Both windows are complete cycles, so the season
+cancels exactly rather than approximately.
+
+On `garden rooms`, the market that exposed the original bug:
+
+| | figure | what it is |
+|---|---|---|
+| old formula | 0.96x | last 3 months of the window over the first 3 — summer against autumn |
+| **year on year** | **0.88x** | twelve months against the twelve before |
+| peak month, one year | September | one unusual month in one year |
+| **peak month, four years** | **April** | a shape that repeats |
+
+Two things worth noticing. The old number was *closer to right than it
+deserved to be* — the decline is real, and the broken formula understated
+it. And the agent who caught the bug drew the wrong inference from it: they
+concluded the builder was buying into the peak month, when averaged over
+four years the September peak is not there. A correct diagnosis of a defect
+is not the same as a correct reading of the data.
+
+**A silent failure this uncovered.** `weighted_trend` filtered on
+`len(k.trend) == 12`. When the history grew to forty-eight months it matched
+nothing, returned an empty series, and the `direction` and `season` claims
+stopped being generated — not rejected, never built. Nothing failed; the
+report was simply quieter. It now takes its length from the data. A
+hardcoded length in a filter is a trap, because the failure looks like a
+finding that did not survive.
+
+| metric | it-9 | it-10 |
+|---|---|---|
+| months of history per call | 12 | **48** |
+| cost per call | $0.09 | **$0.09** |
+| jev checks (live) | 9/9 | **9/9** |
+| dead-end probes across the suite | 1 | **0** |
+
+Refreshing the frozen fixtures with the longer history cost $0.74, which is
+what an eval suite costs when the shape of the data changes. It does not
+recur.

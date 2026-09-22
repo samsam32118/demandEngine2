@@ -38,6 +38,8 @@ K_MAX_SEEDS = 20
 CODE_ARM = {
     "branded_share_high": 0.40,
     "branded_share_low": 0.20,
+    "growth_up": 1.30,
+    "growth_down": 0.77,
     "seasonality": 2.00,
     "self_serve_share": 0.25,
     "job_dominance": 0.45,
@@ -159,6 +161,49 @@ def generate(graph: K.Graph) -> list[Claim]:
              "top_five_share_of_all_searching": round(top5_share, 3),
              "top_five": [f"{k.term} ({k.volume:,}/mo)" for k in top5]},
             _examples(graph.certain), head_kw.topic or ranked[0], "thin")
+
+    # ---- which way is the whole thing going? ----------------------------
+    #
+    # A real year-on-year comparison: the last twelve months against the
+    # twelve before them. Both are complete seasonal cycles, so the season
+    # cancels and what is left is the change in level. This is only
+    # available because every call asks DataForSEO for four years of
+    # history, which it gives away at the same price as one.
+    trended = [(t, rows[t]["growth"]) for t in ranked
+               if rows.get(t, {}).get("growth") is not None]
+    if trended:
+        recent = sum(sum(K.weighted_trend(by_topic[t])[-12:])
+                     for t, _ in trended)
+        prior = sum(sum(K.weighted_trend(by_topic[t])[-24:-12])
+                    for t, _ in trended)
+        overall = (recent / prior) if prior else 1.0
+        rising = sorted([x for x in trended if x[1] >= 1.0],
+                        key=lambda x: -x[1])
+        falling = sorted([x for x in trended if x[1] < 1.0],
+                         key=lambda x: x[1])
+        up = overall >= 1.0
+        exceptions = (falling if up else rising)[:3]
+        years = max((rows[t]["years_of_history"] for t, _ in trended),
+                    default=2)
+        add("market|direction",
+            f"This market is {'growing' if up else 'shrinking'}: across "
+            f"{len(trended)} measured topics the last twelve months ran at "
+            f"{overall:.2f}x the twelve before them"
+            + (f", and the exceptions run the other way — "
+               + "; ".join(f"\u201c{t}\u201d at {g:.2f}x"
+                           for t, g in exceptions) + "."
+               if exceptions else "."),
+            f"Demand across this market as a whole is "
+            f"{'rising' if up else 'falling'} year on year, and it does not "
+            f"move as one — some parts run against the trend.",
+            f"Demand across this market is roughly where it was a year ago, "
+            f"and moves as one.",
+            {"last_twelve_months_over_the_twelve_before": round(overall, 3),
+             "topics_measured": len(trended),
+             "years_of_history": years,
+             "rising": [f"{t} {g:.2f}x" for t, g in rising[:5]],
+             "falling": [f"{t} {g:.2f}x" for t, g in falling[:5]]},
+            top_examples, ranked[0], "direction")
 
     # ---- what sets the price of a click: the topic, or the intention? ---
     by_job: dict[str, list[K.Keyword]] = {}
@@ -392,9 +437,8 @@ def generate(graph: K.Graph) -> list[Claim]:
         peak_topic, peak_ratio = max(seasonal, key=lambda x: x[1])
         series = K.weighted_trend(by_topic[peak_topic])
         months = next((k.months for k in by_topic[peak_topic]
-                       if len(k.months) == 12), [])
-        peak = (K.month_name(months[series.index(max(series))])
-                if months and series else "one month")
+                       if len(k.months) == len(series)), [])
+        peak = K.peak_month(series, months)
         add("market|season",
             f"The most seasonal part of this market is "
             f"\u201c{peak_topic}\u201d, peaking in {peak} at "
@@ -495,6 +539,9 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
             keep = gap >= C["branded_share_high"]
         elif kind == "open":
             keep = ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
+        elif kind == "direction":
+            g = ev.get("last_twelve_months_over_the_twelve_before") or 1.0
+            keep = g >= C["growth_up"] or g <= C["growth_down"]
         elif kind == "season":
             keep = ev.get("peak_over_mean", 0) >= C["seasonality"]
         elif kind == "selfserve":
@@ -625,7 +672,14 @@ def followups(graph: K.Graph, claims: Sequence[Claim],
         kind = claim.kind
         ev = claim.evidence
 
-        if kind == "pricing_axis":
+        if kind == "direction":
+            movers = (ev.get("rising") or []) + (ev.get("falling") or [])
+            seeds = [" ".join(m.split(" ")[:-1]) for m in movers[:4]] or [topic]
+            add(claim,
+                f"Some parts of this market run against the trend — what is "
+                f"inside the ones that do?",
+                "expand", [x for x in seeds if x][:K_MAX_SEEDS], "movers")
+        elif kind == "pricing_axis":
             add(claim,
                 f"If what someone wants is what prices the click, which "
                 f"wants have not been measured yet?",

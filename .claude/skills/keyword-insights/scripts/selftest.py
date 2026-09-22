@@ -67,8 +67,20 @@ def offline() -> None:
     check("median", K.median([1, 2, 3, 4]) == 2.5)
     check("seasonality flat is 1.0", abs(K.seasonality([5] * 12) - 1.0) < 1e-9)
     check("seasonality needs a full year", K.seasonality([1, 2, 3]) is None)
-    check("no growth figure is offered from a 12-month window",
-          not hasattr(K, "growth"))
+    check("a 12-month window yields no growth figure",
+          K.growth([10] * 12) is None)
+    check("two complete cycles do yield one",
+          abs(K.growth([10] * 12 + [20] * 12) - 2.0) < 1e-9)
+    check("the season cancels between matched cycles",
+          abs(K.growth(([1, 9] * 6) * 2) - 1.0) < 1e-9)
+    check("every call asks for four years of history",
+          "date_from" in seo.Seo(cache_dir="/tmp/x")._geo({}))
+    check("seasonality averages matched months across years",
+          abs(K.seasonality([1] * 11 + [12] + [1] * 11 + [12],
+                            [f"{y}-{m:02d}" for y in (2025, 2026)
+                             for m in range(1, 13)])
+              - K.seasonality([1] * 11 + [12],
+                              [f"2026-{m:02d}" for m in range(1, 13)])) < 1e-9)
     check("click price is weighted by searching, not by keyword count",
           abs(K.click_price([K.Keyword("a", 1000, 4.0),
                              K.Keyword("b", 1, 0.0),

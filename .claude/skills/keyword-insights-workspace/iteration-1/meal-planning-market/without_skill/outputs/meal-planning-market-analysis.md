@@ -246,19 +246,26 @@ The pattern is unambiguous: **institutional money at scale has gone to the payer
 
 ---
 
-## 7. Four ways in, ranked
+## 7. Four ways in, ranked best first
 
-### D. Consumer meal planner (generic) — do not do this
-Demand is growing (+122%) and the head term is uncontested (competition index 25). But paid acquisition is 4–10x underwater at $40/year, 82% of App Store entrants have under 10 ratings, and four well-funded predecessors just died here. **Only viable with a genuinely zero-CAC organic channel we can prove before writing code.**
+| # | Path | Allowable CAC | Search demand trend | Verdict |
+|---|---|---|---|---|
+| 1 | Payer / employer-funded ("food as medicine") | Very high (not ad-funded) | n/a | Highest ceiling, hardest start |
+| 2 | B2B — dietitians, coaches, gyms | ~$500–700 | **+70%** cluster, +113% leader | Economics close today |
+| 3 | Consumer recipe-capture-first | ~$30–80 | **+66%** generic intent | Real job, hostile ceiling |
+| 4 | Consumer meal planner (generic) | ~$30–80 | **+122%** head term | Where the bodies are |
 
-### C. Consumer recipe-capture-first — crowded, and the winner is already there
-This is the job users actually pay for, but ReciMe holds 295,500 ratings and Tasty holds 432,783. The monetisation ceiling is visibly $40/year. **Enter only with a structurally different price model** — the reviews contain a direct product brief: *"I would buy this but not sign up for a perpetual subscription."* A one-time-purchase competitor to a subscription leader with 41% recent 1–2 star reviews is a genuine, if modest, opening.
+### 1. Payer / employer-funded ("food as medicine") — highest ceiling, hardest start
+Where the $34M went (Season Health, a16z). Removes the $40/year ARPU ceiling entirely by changing who pays — which is precisely the constraint that killed Yummly and PlateJoy. **Not a search-demand business**, so nothing in this analysis validates or invalidates it; it needs a completely different diligence pass (payer contracts, clinical outcomes, reimbursement codes). Flagging it because it is the only path where the money problem is solved by construction rather than by hope.
 
-### B. B2B — dietitians, nutrition coaches, gyms — best risk-adjusted start
-CPCs of **$22–$34** versus $5.15 consumer. Practice Better's brand search is **+113%** to 24,650/mo, so the category is growing and consolidating around few players. Unit economics work at 5% conversion. **The catch is the ceiling:** category search is tiny (50–170/mo for "nutrition coaching software"), so this is a sales-led, not search-led, business, and paid search adds maybe $50K ARR/year. Good business, not obviously a venture business.
+### 2. B2B — dietitians, nutrition coaches, gyms — best risk-adjusted start
+CPCs of **$22–$34** against $5.15 consumer, so the market itself prices these customers 4–6x higher. Practice Better's brand search is **+113%** to 24,650/mo — the category is growing and consolidating around few players. Unit economics close at a 5% click-to-customer rate (LTV/CAC 2.0), which is an ordinary B2B number rather than a heroic one. **The catch is the ceiling:** category search is tiny (50–170/mo for "nutrition coaching software"), so this is sales-led, not search-led, and paid search contributes maybe $50K ARR/year. A good business; not obviously a venture-scale one.
 
-### A. Payer / employer-funded ("food as medicine") — highest ceiling, hardest start
-Where the $34M went. Removes the $40/year ARPU ceiling entirely by changing who pays. **Not a search-demand business**, so nothing in this analysis validates or invalidates it — it would need a completely different diligence pass (payer contracts, clinical outcomes, reimbursement codes).
+### 3. Consumer recipe-capture-first — crowded, and the winner is already there
+This is the job users actually pay for (21 of 100 ReciMe reviews are about import working or failing), but ReciMe holds 295,500 ratings and Tasty 432,783, and the monetisation ceiling is visibly $40/year. **Enter only with a structurally different price model.** The reviews contain a direct product brief: *"I would buy this but not sign up for a perpetual subscription."* A one-time-purchase challenger to a subscription leader carrying 41% recent 1–2 star reviews is a genuine, if modest, opening.
+
+### 4. Consumer meal planner (generic) — do not do this without a proven channel
+Demand is growing fastest here (**+122%**) and the head term is uncontested (competition index 25 of 100). But paid acquisition is 4–10x underwater at $40/year, 82% of App Store entrants have under 10 ratings, and four well-funded predecessors died on this exact spot inside 24 months. **Only viable with a genuinely zero-CAC organic channel — and we should prove that channel before writing any code.**
 
 ---
 

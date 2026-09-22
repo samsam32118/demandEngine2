@@ -185,6 +185,12 @@ loop.py run "crm software" --dry-run      # what it would cost, spends nothing
 Costs reported are the `cost` field each response returned — the amount the
 vendor actually billed. Nothing here estimates its own spend.
 
+Every call asks for **four years of monthly history**, which DataForSEO
+returns at the same price as twelve months. That is what makes a real
+year-on-year figure possible: twelve months cannot separate a trend from a
+season, and dividing one part of a single year by another produces a
+seasonal artefact wearing a trend's clothes. See `references/graph.md`.
+
 ## Running it
 
 1. **Pick the seed deliberately.** A head term ("crm software") expands into

@@ -179,38 +179,84 @@ def share(part: float, whole: float) -> float:
     return (part / whole) if whole else 0.0
 
 
-def direction_is_unmeasurable() -> str:
-    """Why this module offers no growth figure.
+def growth(trend: Sequence[int]) -> float | None:
+    """The most recent twelve months against the twelve before them.
 
-    DataForSEO returns exactly twelve months, and for this account they run
-    September to August. So the "last quarter" is June-July-August and the
-    "first quarter" is September-October-November: different parts of the
-    year, nine months apart, not the same quarter a year earlier.
+    Both windows are complete seasonal cycles, so the season cancels
+    exactly and what is left is the change in level between years. This
+    needs twenty-four months; with twelve there is no honest answer, and an
+    earlier version of this function invented one by dividing the last
+    quarter of the window by the first — June-July-August against
+    September-October-November, nine months apart. On `garden rooms` that
+    reported a market shrinking to 0.88x when September is the highest month
+    of the year, which would have told a builder demand was falling as they
+    bought ads into the peak.
 
-    A ratio between them is a seasonal comparison wearing the clothes of a
-    trend. On `garden rooms` it read as a market shrinking to 0.88x, when
-    September is the highest month of the entire series — the builder would
-    have been told demand was falling as they bought ads in the peak month.
-
-    Twelve months of data cannot separate trend from season: one full cycle
-    gives you the shape of the year and nothing about the level between
-    years, and a least-squares slope over exactly one period still varies
-    with where in the cycle the window happens to start. There is no fix
-    inside this data, so there is no growth claim. `seasonality` below is
-    what twelve months *can* honestly support.
+    The fix was not arithmetic. It was asking DataForSEO for the history it
+    gives away free: `date_from` returns forty-eight months for the price of
+    twelve. See `seo.history_start`.
     """
-    return ("A twelve-month window shows the shape of a year, not the "
-            "change between years, so no growth figure is reported.")
+    if len(trend) < 24:
+        return None
+    recent = sum(trend[-12:])
+    prior = sum(trend[-24:-12])
+    if prior <= 0:
+        return None
+    return recent / prior
 
 
-def seasonality(trend: Sequence[int]) -> float | None:
-    """Peak month over mean month. 1.0 is flat; 3.0 means a real season."""
+def long_growth(trend: Sequence[int]) -> float | None:
+    """The latest year against the earliest one in the window."""
+    if len(trend) < 24:
+        return None
+    first = sum(trend[:12])
+    if first <= 0:
+        return None
+    return sum(trend[-12:]) / first
+
+
+def years_of_history(trend: Sequence[int]) -> int:
+    return len(trend) // 12
+
+
+def seasonality(trend: Sequence[int], months: Sequence[str] = ()) -> float | None:
+    """Peak month over mean month, averaged across every year available.
+
+    One year of data gives one observation per month, so a single unusual
+    month reads as a season. Averaging the same calendar month across four
+    years separates a shape that repeats from a month that was odd once.
+    """
     if len(trend) < 12:
         return None
-    mean = sum(trend) / len(trend)
+    per_month = _by_calendar_month(trend, months)
+    mean = sum(per_month) / len(per_month)
     if mean <= 0:
         return None
-    return max(trend) / mean
+    return max(per_month) / mean
+
+
+def _by_calendar_month(trend: Sequence[int],
+                       months: Sequence[str] = ()) -> list[float]:
+    """Twelve figures, each averaged over every year in the window."""
+    buckets: dict[int, list[int]] = {}
+    for i, value in enumerate(trend):
+        if months and i < len(months):
+            try:
+                key = int(months[i].split("-")[1])
+            except (ValueError, IndexError):
+                key = i % 12 + 1
+        else:
+            key = i % 12 + 1
+        buckets.setdefault(key, []).append(value)
+    return [sum(v) / len(v) for _, v in sorted(buckets.items())]
+
+
+def peak_month(trend: Sequence[int], months: Sequence[str]) -> str:
+    """Which calendar month peaks, across every year available."""
+    per_month = _by_calendar_month(trend, months)
+    if not per_month:
+        return "one month"
+    return MONTHS[per_month.index(max(per_month))]
 
 
 def concentration(values: Sequence[float]) -> float:
@@ -237,10 +283,20 @@ def click_price(keywords: Sequence[Keyword]) -> float:
 
 
 def weighted_trend(keywords: Sequence[Keyword]) -> list[int]:
-    """Volume-weighted 12-month series for a group, as absolute searches."""
-    series = [k.trend for k in keywords if len(k.trend) == 12]
-    if not series:
+    """Volume-weighted monthly series for a group, as absolute searches.
+
+    The length is whatever most of these keywords carry, not a fixed twelve.
+    Asking DataForSEO for four years of history turned every series into
+    forty-eight months, and a hardcoded `== 12` here silently matched none
+    of them — so trend and season stopped being generated at all rather
+    than failing loudly. Series of other lengths are left out of the sum
+    because adding a short one to a long one shifts every month it touches.
+    """
+    lengths = Counter(len(k.trend) for k in keywords if k.trend)
+    if not lengths:
         return []
+    span, _ = lengths.most_common(1)[0]
+    series = [k.trend for k in keywords if len(k.trend) == span]
     return [sum(col) for col in zip(*series)]
 
 
@@ -576,6 +632,8 @@ class Graph:
         for topic, kws in by_topic.items():
             vol = sum(k.volume for k in kws)
             trend = weighted_trend(kws)
+            tmonths = next((k.months for k in kws
+                            if len(k.months) == len(trend)), [])
             job_vol = Counter()
             for k in kws:
                 job_vol[k.job] += k.volume
@@ -594,8 +652,14 @@ class Graph:
                             for j, v in job_vol.most_common()},
                 "job_concentration": round(concentration(
                     list(job_vol.values())), 3),
-                "seasonality": (round(seasonality(trend), 2)
-                                if seasonality(trend) is not None else None),
+                "growth": (round(growth(trend), 3)
+                           if growth(trend) is not None else None),
+                "long_growth": (round(long_growth(trend), 3)
+                                if long_growth(trend) is not None else None),
+                "years_of_history": years_of_history(trend),
+                "seasonality": (round(seasonality(trend, tmonths), 2)
+                                if seasonality(trend, tmonths) is not None
+                                else None),
             })
         return sorted(rows, key=lambda r: -r["volume"])
 

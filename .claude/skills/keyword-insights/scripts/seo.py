@@ -19,6 +19,7 @@ Stdlib only.
 from __future__ import annotations
 
 import base64
+import datetime
 import hashlib
 import json
 import os
@@ -40,6 +41,26 @@ MAX_SEEDS = 20          # keywords_for_keywords
 MAX_PRICED = 1000       # search_volume
 
 CRED_ENV = ("DATA_FOR_SEO_LOGIN", "DATA_FOR_SEO_PASSWORD")
+
+# Google Ads keeps four years of monthly history, and DataForSEO returns as
+# much of it as `date_from` asks for **at no extra cost** — the same $0.09
+# whether the response carries twelve months or forty-eight.
+#
+# This is not a nicety. With twelve months you cannot separate a trend from
+# a season: the window runs September to August, so "the last quarter
+# against the first" compares summer to autumn. With forty-eight you can
+# compare one complete cycle to the one before it, and the season cancels
+# exactly. Not asking for the history was the difference between a real
+# growth figure and a seasonal artefact presented as one.
+HISTORY_YEARS = 4
+
+
+def history_start(today: datetime.date | None = None) -> str:
+    day = (today or datetime.date.today()).replace(day=1)
+    try:
+        return day.replace(year=day.year - HISTORY_YEARS).isoformat()
+    except ValueError:                       # 29 February
+        return day.replace(year=day.year - HISTORY_YEARS, day=28).isoformat()
 
 ENDPOINTS = {
     "expand": "keywords_data/google_ads/keywords_for_keywords/live",
@@ -261,6 +282,7 @@ class Seo:
         return self._auth
 
     def _geo(self, task: dict) -> dict:
+        task.setdefault("date_from", history_start())
         if isinstance(self.location, int):
             task["location_code"] = self.location
         elif self.location:
