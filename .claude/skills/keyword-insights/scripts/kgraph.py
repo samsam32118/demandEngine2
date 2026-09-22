@@ -179,20 +179,28 @@ def share(part: float, whole: float) -> float:
     return (part / whole) if whole else 0.0
 
 
-def growth(trend: Sequence[int]) -> float | None:
-    """Last quarter against the same quarter a year earlier, as a ratio.
+def direction_is_unmeasurable() -> str:
+    """Why this module offers no growth figure.
 
-    Returns None rather than a made-up number when the series is too short,
-    because a growth figure computed from four months is a lie with a
-    decimal point on it.
+    DataForSEO returns exactly twelve months, and for this account they run
+    September to August. So the "last quarter" is June-July-August and the
+    "first quarter" is September-October-November: different parts of the
+    year, nine months apart, not the same quarter a year earlier.
+
+    A ratio between them is a seasonal comparison wearing the clothes of a
+    trend. On `garden rooms` it read as a market shrinking to 0.88x, when
+    September is the highest month of the entire series — the builder would
+    have been told demand was falling as they bought ads in the peak month.
+
+    Twelve months of data cannot separate trend from season: one full cycle
+    gives you the shape of the year and nothing about the level between
+    years, and a least-squares slope over exactly one period still varies
+    with where in the cycle the window happens to start. There is no fix
+    inside this data, so there is no growth claim. `seasonality` below is
+    what twelve months *can* honestly support.
     """
-    if len(trend) < 12:
-        return None
-    recent = sum(trend[-3:])
-    year_ago = sum(trend[:3])
-    if year_ago <= 0:
-        return None
-    return recent / year_ago
+    return ("A twelve-month window shows the shape of a year, not the "
+            "change between years, so no growth figure is reported.")
 
 
 def seasonality(trend: Sequence[int]) -> float | None:
@@ -211,6 +219,21 @@ def concentration(values: Sequence[float]) -> float:
     if total <= 0:
         return 0.0
     return sum((v / total) ** 2 for v in values)
+
+
+def click_price(keywords: Sequence[Keyword]) -> float:
+    """What a click costs here, weighted by how often each term is searched.
+
+    A plain median over the keywords answers the wrong question. "garden
+    studios" had 62 of its 81 keywords at no cost — long-tail terms nobody
+    bids on — so its median click read $0.00 while its head term, carrying
+    most of the searching, went for $3.80. Weighting by volume gives the
+    number an advertiser is actually exposed to.
+    """
+    total = sum(k.volume for k in keywords)
+    if total <= 0:
+        return median([k.cpc for k in keywords])
+    return sum(k.volume * k.cpc for k in keywords) / total
 
 
 def weighted_trend(keywords: Sequence[Keyword]) -> list[int]:
@@ -277,26 +300,43 @@ def mine_entities(keywords: Iterable[Keyword], *, limit: int = 30) -> list[str]:
     return [t for t, _ in weight.most_common(limit * 3)][:limit]
 
 
+# Facets that read naturally in front of a phrase. Which side a modifier
+# goes is irrelevant to the answer — Google normalises word order and
+# returns identical metrics for "garden rooms pricing" and "pricing garden
+# rooms" — but it is not irrelevant to the bill. Emitting both spent half of
+# every thousand-slot probe asking the same question twice.
+PREFIX_FACETS = frozenset({
+    "best", "top", "free", "cheap", "how to", "what is", "open source",
+    "diy", "manual", "bespoke", "enterprise",
+})
+
+
 def probe_candidates(topics: Sequence[str], facets: Sequence[str],
                      known: set[str], *, limit: int = 1000) -> list[str]:
     """Topic x facet combinations nobody has measured yet.
 
     This is the cheapest hypothesis test in the whole method: up to a
-    thousand guesses about what people search, answered for the price of one
-    call. Ordering is deterministic so a repeat run hits the cache.
+    thousand guesses about what people search, answered for the price of
+    one. Each pair is emitted once — see PREFIX_FACETS — so the slots go to
+    a thousand different questions rather than five hundred asked twice.
+
+    Ordering is deterministic so a repeat run hits the cache.
     """
     out: list[str] = []
     seen: set[str] = set()
     for topic in topics:
         for facet in facets:
-            for term in (f"{facet} {topic}", f"{topic} {facet}"):
-                term = " ".join(term.split()).lower()
-                if term in known or term in seen or facet in topic:
-                    continue
-                seen.add(term)
-                out.append(term)
-                if len(out) >= limit:
-                    return out
+            if facet in topic:
+                continue
+            term = (f"{facet} {topic}" if facet in PREFIX_FACETS
+                    else f"{topic} {facet}")
+            term = " ".join(term.split()).lower()
+            if term in known or term in seen:
+                continue
+            seen.add(term)
+            out.append(term)
+            if len(out) >= limit:
+                return out
     return out
 
 
@@ -325,8 +365,8 @@ class Cell:
         return sum(k.money for k in self.keywords)
 
     @property
-    def median_cpc(self) -> float:
-        return median([k.cpc for k in self.keywords])
+    def click_price(self) -> float:
+        return click_price(self.keywords)
 
     @property
     def max_cpc(self) -> float:
@@ -357,15 +397,35 @@ class Graph:
         self.topics: dict[str, Topic] = {}
         self.entities: dict[str, Entity] = {}
         self.iterations: list[dict] = []
+        self.collapsed = 0
         self.add_topic(self.seed, kind="seed", confirmed=True)
 
     # -- mutation ---------------------------------------------------------
 
     def add_rows(self, rows: Iterable[dict]) -> int:
-        """Merge measured rows. A keyword measured twice keeps the richer row."""
+        """Merge measured rows, collapsing word-order permutations.
+
+        Google returns "garden rooms" and "rooms garden" as separate
+        keywords with identical volume and identical click price, because it
+        normalises word order and reports the same aggregate for both.
+        Counting both inflates a market: 16% of the `garden rooms` corpus
+        and 42% of one probe's results were the same searches counted twice.
+
+        Whichever ordering is kept, the metrics are the same, so the choice
+        of survivor does not change any number — only the double-count does.
+        """
         added = 0
+        by_shape: dict[tuple[str, ...], str] = {}
+        for term in self.keywords:
+            by_shape.setdefault(tuple(sorted(term.split())), term)
         for row in rows:
             term = row["term"]
+            shape = tuple(sorted(term.split()))
+            kept = by_shape.get(shape)
+            if kept is not None and kept != term:
+                self.collapsed += 1
+                continue
+            by_shape.setdefault(shape, term)
             existing = self.keywords.get(term)
             if existing is None:
                 self.keywords[term] = Keyword(**row)
@@ -483,8 +543,9 @@ class Graph:
         return sum(k.volume for k in self.certain)
 
     @property
-    def corpus_median_cpc(self) -> float:
-        return median([k.cpc for k in self.keywords.values() if k.volume > 0])
+    def market_click_price(self) -> float:
+        """What a click costs across the whole market, weighted by searching."""
+        return click_price([k for k in self.keywords.values() if k.volume > 0])
 
     def containment_topics(self, term: str) -> list[str]:
         """Topics literally present in the keyword.
@@ -523,7 +584,7 @@ class Graph:
                 "keywords": len(kws),
                 "volume": vol,
                 "money": round(sum(k.money for k in kws), 2),
-                "median_cpc": round(median([k.cpc for k in kws]), 2),
+                "click_price": round(click_price(kws), 2),
                 "max_high_bid": round(max((k.high_bid for k in kws),
                                           default=0.0), 2),
                 "branded_volume": sum(k.volume for k in kws if k.entities),
@@ -533,8 +594,6 @@ class Graph:
                             for j, v in job_vol.most_common()},
                 "job_concentration": round(concentration(
                     list(job_vol.values())), 3),
-                "growth": (round(growth(trend), 3)
-                           if growth(trend) is not None else None),
                 "seasonality": (round(seasonality(trend), 2)
                                 if seasonality(trend) is not None else None),
             })

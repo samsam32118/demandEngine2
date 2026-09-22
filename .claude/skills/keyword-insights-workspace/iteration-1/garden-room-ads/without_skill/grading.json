@@ -3,17 +3,17 @@
     {
       "text": "The deliverable is a markdown file, not just chat output",
       "passed": true,
-      "evidence": "10110 chars"
+      "evidence": "19772 chars"
     },
     {
       "text": "Findings cite real monthly search volumes for named keywords",
       "passed": true,
-      "evidence": "22 volume figures"
+      "evidence": "29 volume figures"
     },
     {
       "text": "Findings cite real click prices (CPC or top-of-page bid)",
       "passed": true,
-      "evidence": "41 price figures"
+      "evidence": "145 price figures"
     },
     {
       "text": "The report states what the research actually cost",
@@ -28,7 +28,7 @@
     {
       "text": "No single observation is restated more than twice as separate findings",
       "passed": true,
-      "evidence": "most repeated shape appears 1x across 4 findings"
+      "evidence": "most repeated shape appears 1x across 1 findings"
     },
     {
       "text": "The report says what it does NOT know, or what it checked and could not confirm",
@@ -48,5 +48,5 @@
   ],
   "passed": 9,
   "of": 9,
-  "output_file": "insights-garden-rooms.md"
+  "output_file": "garden-rooms-google-ads-uk.md"
 }

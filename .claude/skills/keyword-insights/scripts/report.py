@@ -194,14 +194,14 @@ def render(graph: K.Graph, claims: Sequence[judge.Claim],
     if rows:
         L.append("## The shape of the market")
         L.append("")
-        L.append("| what people search about | searches/mo | median click | "
+        L.append("| what people search about | searches/mo | click price | "
                  "names a brand | mostly trying to |")
         L.append("|---|---:|---:|---:|---|")
         for r in rows[:14]:
             top_job = next(iter(r["job_mix"]), "")
             L.append(
                 f"| {r['topic']} | {n(r['volume'])} | "
-                f"{usd(r['median_cpc'])} | {pct(r['branded_share'])} | "
+                f"{usd(r['click_price'])} | {pct(r['branded_share'])} | "
                 f"{K.JOB_LABELS.get(top_job, top_job)} |")
         L.append("")
 

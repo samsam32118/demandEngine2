@@ -129,7 +129,7 @@ class Run:
                             for k, v in list(r["job_mix"].items())[:3])
             lines.append(
                 f"{r['topic']}: {r['volume']:,} searches/mo, "
-                f"median click ${r['median_cpc']:.2f}, "
+                f"click price {r['click_price']:.2f}, "
                 f"{int(r['branded_share'] * 100)}% name a brand; {mix}")
         return "\n".join(lines)
 

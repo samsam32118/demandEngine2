@@ -54,7 +54,6 @@ which topics break the pattern.
 | family | reads | the question it settles |
 |---|---|---|
 | `thin` | corpus size, top-5 concentration | is there enough spread here to tell buyers apart at all? |
-| `direction` | 12-month series, summed across topics | is this growing or shrinking, and what runs the other way? |
 | `pricing_axis` | click-price spread across jobs vs across topics | is a click priced by what someone wants, or by where they are? |
 | `intent` | volume by job, and the topic furthest from the market's mix | what is everyone doing here, and who is doing something else? |
 | `ambiguity` | share of volume whose intent was indistinguishable | how much of this market's searching tells you nothing? |
@@ -66,6 +65,28 @@ which topics break the pattern.
 | `season` | peak month over mean, per topic | is there a season, and where is it sharpest? |
 | `substitute` | keywords naming two topics at once | what is weighed against what? |
 | `gradient` | bare topic vs its dearest qualified form | does narrowing reach a different buyer, or just fewer? |
+
+## Two things this data cannot tell you
+
+**Whether a market is growing.** DataForSEO returns exactly twelve months —
+for this account, September through August. The "last quarter" is therefore
+June-July-August and the "first quarter" is September-October-November:
+different parts of the year, nine months apart. A ratio between them is a
+seasonal comparison wearing the clothes of a trend, and on `garden rooms` it
+read as a market shrinking to 0.88x when September is the highest month of
+the whole series — a builder would have been told demand was falling as they
+bought ads in the peak month. One full cycle gives the shape of a year and
+nothing about the level between years, so there is no growth claim.
+`seasonality` is what twelve months can honestly support.
+
+**Whether two near-identical phrases are really two things.** Google reports
+a *combined* volume for terms it considers near-duplicates, so `insulated
+garden rooms` and `insulated garden office` come back with identical volume,
+identical click price and identical bid ranges. They are one measurement
+under two names, and telling them apart would need them submitted in
+separate requests. Word-order permutations (`garden rooms` / `rooms garden`)
+are collapsed on the way in; this second layer is not detectable from one
+response and is left as it arrives.
 
 ## Follow-ups
 

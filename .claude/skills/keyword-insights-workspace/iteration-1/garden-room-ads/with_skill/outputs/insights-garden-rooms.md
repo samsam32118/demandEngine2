@@ -2,7 +2,7 @@
 
 **United Kingdom · 2026-09-22**
 
-1,317 keywords measured, carrying 299,200 searches a month. 750 of them were placed on two axes — what the search is about, and what the person is trying to do — covering 100% of that searching. 13 statements the data could support were generated and tested; 4 survived.
+1,317 keywords measured, carrying 299,200 searches a month. 750 of them — 100% of that searching — were put on two axes: what the search is about, and what the person is trying to do. The words resolved the second question for 642 of them, **94% of the market's searching**, and everything below is built on that subset alone; the rest is short head terms that do not say what the searcher wants, and are left out rather than guessed at. 13 statements the data could support were generated and tested; 4 survived.
 
 Written for: *a UK garden room building company about to spend £4,000 on Google Ads and deciding which searches to bid on*. That matters — a finding is only valuable relative to the decision someone is about to make, so the same data judged for a different reader would keep a different set.
 
@@ -121,11 +121,11 @@ Every statement the shape of the data permitted was built and tested, including 
 
 | | calls | actual |
 |---|---:|---:|
-| DataForSEO | 3 billable (+0 cached) | $0.2700 |
-| Jev | 37 requests, 422,757 input tokens | $0.0178 |
-| **total** | | **$0.2878** |
+| DataForSEO | 0 billable (+3 cached) | $0.0000 |
+| Jev | 2 requests, 11,003 input tokens | $0.0005 |
+| **total** | | **$0.0005** |
 
-DataForSEO figures are the `cost` each response reported, not an estimate. Run time 34.0s.
+DataForSEO figures are the `cost` each response reported, not an estimate. Run time 1.5s.
 
 ## How to read this
 
@@ -134,3 +134,5 @@ Every sentence above was assembled by code from measured numbers, and every deci
 The two tests worth knowing about: a statement is **swapped** — its subject replaced with an unrelated one — and kept only if it then reads as false, because a statement that survives that substitution was never about this market. And it is asked whether it could be **guessed from the market's name alone**; if so, the data paid for nothing.
 
 Search volume and click prices are Google Ads figures for United Kingdom. Volume is a monthly average, not a forecast; click prices are what advertisers have been paying, which is evidence that money moves — not a quote.
+
+**On the currency.** DataForSEO returns click prices as bare numbers — its response carries no currency field — and documents them as US dollars. They are shown here with `$` on that basis, not because the source said so. If your Google Ads account bills in another currency, convert before budgeting against these figures.

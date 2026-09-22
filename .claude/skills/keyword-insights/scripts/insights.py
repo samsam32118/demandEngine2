@@ -38,8 +38,6 @@ K_MAX_SEEDS = 20
 CODE_ARM = {
     "branded_share_high": 0.40,
     "branded_share_low": 0.20,
-    "growth_up": 1.30,
-    "growth_down": 0.77,
     "seasonality": 2.00,
     "self_serve_share": 0.25,
     "job_dominance": 0.45,
@@ -113,7 +111,7 @@ def generate(graph: K.Graph) -> list[Claim]:
     if not by_topic:
         return claims
 
-    market_median = graph.corpus_median_cpc
+    market_price = graph.market_click_price
     total_money = graph.total_money
     ranked = sorted(by_topic, key=lambda t: -rows.get(t, {}).get("volume", 0))
     top_examples = _examples(by_topic[ranked[0]])
@@ -162,45 +160,14 @@ def generate(graph: K.Graph) -> list[Claim]:
              "top_five": [f"{k.term} ({k.volume:,}/mo)" for k in top5]},
             _examples(graph.certain), head_kw.topic or ranked[0], "thin")
 
-    # ---- which way is the whole thing going? ----------------------------
-    trended = [(t, rows[t]["growth"]) for t in ranked
-               if rows.get(t, {}).get("growth") is not None]
-    if trended:
-        recent = sum(sum(K.weighted_trend(by_topic[t])[-3:]) for t, _ in trended)
-        prior = sum(sum(K.weighted_trend(by_topic[t])[:3]) for t, _ in trended)
-        overall = (recent / prior) if prior else 1.0
-        rising = sorted([x for x in trended if x[1] >= 1.0],
-                        key=lambda x: -x[1])
-        falling = sorted([x for x in trended if x[1] < 1.0], key=lambda x: x[1])
-        up = overall >= 1.0
-        exceptions = (falling if up else rising)[:3]
-        add("market|direction",
-            f"This market is {'growing' if up else 'shrinking'}: across "
-            f"{len(trended)} measured topics the last three months ran at "
-            f"{overall:.2f}x the same three a year earlier"
-            + (f", and the exceptions run the other way — "
-               + "; ".join(f"\u201c{t}\u201d at {g:.2f}x"
-                           for t, g in exceptions) + "."
-               if exceptions else "."),
-            f"Demand across this market as a whole is "
-            f"{'rising' if up else 'falling'} year on year, and it does not "
-            f"move as one — some parts run against the trend.",
-            f"Demand across this market is roughly where it was a year ago, "
-            f"and moves as one.",
-            {"market_last_quarter_over_year_ago": round(overall, 3),
-             "topics_measured": len(trended),
-             "rising": [f"{t} {g:.2f}x" for t, g in rising[:5]],
-             "falling": [f"{t} {g:.2f}x" for t, g in falling[:5]]},
-            top_examples, ranked[0], "direction")
-
     # ---- what sets the price of a click: the topic, or the intention? ---
     by_job: dict[str, list[K.Keyword]] = {}
     for kw in graph.certain:
         by_job.setdefault(kw.job, []).append(kw)
-    job_cpc = {j: K.median([k.cpc for k in kws])
+    job_cpc = {j: K.click_price(kws)
                for j, kws in by_job.items() if len(kws) >= 2}
-    topic_cpc = {t: rows[t]["median_cpc"] for t in ranked
-                 if rows.get(t, {}).get("median_cpc", 0) > 0}
+    topic_cpc = {t: rows[t]["click_price"] for t in ranked
+                 if rows.get(t, {}).get("click_price", 0) > 0}
     if len(job_cpc) >= 2 and len(topic_cpc) >= 2:
         jv = [v for v in job_cpc.values() if v > 0]
         tv = [v for v in topic_cpc.values() if v > 0]
@@ -215,7 +182,7 @@ def generate(graph: K.Graph) -> list[Claim]:
                     else "which part of the market they are in")
             add("market|pricing_axis",
                 f"In this market a click is priced by {axis}. Across "
-                f"intentions the median click runs "
+                f"intentions the click price runs "
                 f"{usd(min(jv))}\u2013{usd(max(jv))} "
                 f"({job_spread:.1f}x), dearest among people "
                 f"{K.JOB_LABELS.get(dear_job, dear_job)} and cheapest among "
@@ -228,13 +195,13 @@ def generate(graph: K.Graph) -> list[Claim]:
                 f"What a click costs in this market is set mainly by "
                 + ("which part of the market the searcher is in."
                    if intent_wins else "what the searcher wants."),
-                {"median_cpc_by_intent": {j: round(v, 2)
+                {"click_price_by_intent": {j: round(v, 2)
                                           for j, v in sorted(
                                               job_cpc.items(),
                                               key=lambda x: -x[1])},
                  "spread_across_intent": round(job_spread, 2),
                  "spread_across_topic": round(topic_spread, 2),
-                 "market_median_cpc": round(market_median, 2)},
+                 "market_click_price": round(market_price, 2)},
                 _examples(by_job.get(dear_job, [])), dear_topic,
                 "pricing_axis")
 
@@ -415,8 +382,7 @@ def generate(graph: K.Graph) -> list[Claim]:
              "heaviest_topic": worst,
              "heaviest_share": round(
                  rows[worst]["job_mix"].get("self_serve", 0), 3),
-             "median_cpc_of_self_serve": round(
-                 K.median([k.cpc for k in ss_kws]), 2)},
+             "click_price_of_self_serve": round(K.click_price(ss_kws), 2)},
             _examples(ss_kws), worst, "selfserve")
 
     # ---- is there a season? ---------------------------------------------
@@ -529,9 +495,6 @@ def select_by_code(graph: K.Graph, claims: Sequence[Claim]) -> list[Claim]:
             keep = gap >= C["branded_share_high"]
         elif kind == "open":
             keep = ev.get("unbranded_share", 0) >= 1 - C["branded_share_low"]
-        elif kind == "growth":
-            g = ev.get("last_quarter_over_year_ago") or 1.0
-            keep = g >= C["growth_up"] or g <= C["growth_down"]
         elif kind == "season":
             keep = ev.get("peak_over_mean", 0) >= C["seasonality"]
         elif kind == "selfserve":
@@ -662,14 +625,7 @@ def followups(graph: K.Graph, claims: Sequence[Claim],
         kind = claim.kind
         ev = claim.evidence
 
-        if kind == "direction":
-            movers = (ev.get("rising") or []) + (ev.get("falling") or [])
-            seeds = [m.split(" ")[0] for m in movers[:4]] or [topic]
-            add(claim,
-                f"Some parts of this market run against the trend — what is "
-                f"inside the ones that do?",
-                "expand", seeds[:K_MAX_SEEDS], "movers")
-        elif kind == "pricing_axis":
+        if kind == "pricing_axis":
             add(claim,
                 f"If what someone wants is what prices the click, which "
                 f"wants have not been measured yet?",

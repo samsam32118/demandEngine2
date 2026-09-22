@@ -186,3 +186,95 @@ the judging but not the chasing — a follow-up probe's keyword list changes
 when a rubric changes, so it misses the cache and the loop stops. The eval
 measures what survives, not what gets chased. Testing the chase costs real
 calls: `run_evals.py --live`.
+
+---
+
+## it-9 — three defects found by handing the skill to strangers
+
+Two agents were given the skill and a realistic prompt and nothing else.
+Both produced reports that passed every assertion, and both found bugs the
+author's own testing had not. That is the argument for the exercise.
+
+### The growth figure was measuring the season
+
+`growth()` computed `sum(trend[-3:]) / sum(trend[:3])` and its docstring
+called it "last quarter against the same quarter a year earlier". It is not.
+DataForSEO returns exactly twelve months — for this account September
+through August — so the comparison is **June-July-August against
+September-October-November**: different parts of the year, nine months
+apart.
+
+On `garden rooms` this read as a market shrinking to 0.88x. September is the
+single highest month in the entire series. A builder about to buy ads would
+have been told demand was falling *as they bought into the peak month* — and
+the report's own seasonality finding was sitting three lines below,
+naming September as the peak.
+
+There is no fix inside the data. Twelve months gives the shape of a year and
+nothing about the level between years, and a least-squares slope over
+exactly one period still varies with where the window starts. **The
+`direction` family is removed**, and `kgraph.direction_is_unmeasurable()`
+says why, so nobody adds it back.
+
+### Half of every probe was buying the same answer twice
+
+`probe_candidates` emitted both `"{facet} {topic}"` and `"{topic} {facet}"`.
+Google normalises word order and returns identical volume and identical
+click price for both, so every thousand-slot probe was spending five hundred
+slots asking questions it had already asked.
+
+Measured across the cached corpora, the duplication lands almost entirely in
+this skill's own probes, not in Google's expansions:
+
+| source | duplicated share of volume |
+|---|---|
+| `expand` (Google's own idea list) | 0–4% |
+| `price` (probes this skill synthesised) | **13–42%** |
+
+Two fixes. `probe_candidates` now emits each pair once, so a probe tests a
+thousand different questions instead of five hundred twice. And `add_rows`
+collapses word-order permutations on the way in, which catches Google's own
+as well — 428 of them in the UK corpus.
+
+A second layer is **not** fixable from one response: Google reports a
+*combined* volume for terms it considers near-duplicates, so `insulated
+garden rooms` and `insulated garden office` arrive byte-identical. Telling
+those apart needs them submitted in separate requests. Recorded in
+`references/graph.md` rather than papered over.
+
+### A median click price of $0.00 on a market whose head term costs $3.80
+
+`garden studios` showed `median click $0.00` because 44 of its 63 keywords
+are long-tail terms nobody bids on — while the head term, carrying most of
+the searching, goes for $3.84. An unweighted median over keywords answers a
+question no advertiser asked. Replaced with a click price weighted by how
+much each term is searched: `Σ(volume × cpc) / Σ(volume)`, which is what an
+advertiser is actually exposed to. Same cluster, same data, $0.00 → $3.84.
+
+### What the evals did not catch
+
+Both arms scored 9/9 on the garden-rooms assertions — **the assertions do
+not discriminate.** They check that a report cites volumes, cites prices,
+states its cost and admits what it does not know, and a competent agent with
+the raw `dataforseo-keywords` skill does all of that too.
+
+The real difference showed up in the content, and not entirely in this
+skill's favour. Asked about a £4,000 ad budget, the baseline ran click and
+spend forecasts and pulled a competitor's live ad creatives, and answered
+*"£4,000 ≈ 1,250 clicks, and on broad match the budget lasts four days"*.
+This skill answered what the market is shaped like. For that prompt the
+baseline's answer was more directly usable. It also took **630 seconds and
+$0.36** against **365 seconds and $0.29** — and a second run of it would
+have produced a different report, where this one is reproducible.
+
+The honest reading: this skill is for understanding a market, and it should
+not be reached for when the question is what a specific budget buys. The
+assertions should be rewritten to test that distinction rather than the
+presence of numbers.
+
+| metric | it-8 | it-9 |
+|---|---|---|
+| jev checks | 9/9 | 9/9 |
+| code checks | 7/9 | 8/9 |
+| jev kept_share | 0.27 | 0.24 |
+| distinct hypotheses per price probe | ~500 | **~1000** |

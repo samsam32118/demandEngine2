@@ -65,9 +65,14 @@ def fixture() -> K.Graph:
 def offline() -> None:
     print("arithmetic")
     check("median", K.median([1, 2, 3, 4]) == 2.5)
-    check("growth needs 12 months", K.growth([1, 2, 3]) is None)
-    check("growth ratio", abs(K.growth([10] * 6 + [20] * 6) - 2.0) < 1e-9)
     check("seasonality flat is 1.0", abs(K.seasonality([5] * 12) - 1.0) < 1e-9)
+    check("seasonality needs a full year", K.seasonality([1, 2, 3]) is None)
+    check("no growth figure is offered from a 12-month window",
+          not hasattr(K, "growth"))
+    check("click price is weighted by searching, not by keyword count",
+          abs(K.click_price([K.Keyword("a", 1000, 4.0),
+                             K.Keyword("b", 1, 0.0),
+                             K.Keyword("c", 1, 0.0)]) - 4.0) < 0.02)
     check("share by zero is zero", K.share(5, 0) == 0.0)
     check("concentration of one", K.concentration([7]) == 1.0)
     check("month name", K.month_name("2025-11") == "November")
@@ -84,12 +89,20 @@ def offline() -> None:
           "crm" not in g.confirmed_topics and
           "crm software" in g.confirmed_topics)
     known = set(g.keywords)
-    probes = K.probe_candidates(["crm software"], ["pricing"], known, limit=9)
+    probes = K.probe_candidates(["crm software"], ["migration", "cheap"],
+                                known, limit=9)
+    check("each hypothesis is tested once, not in both word orders",
+          len({tuple(sorted(t.split())) for t in probes}) == len(probes),
+          str(probes))
+    check("prefix facets read the natural way round",
+          "cheap crm software" in probes
+          and "crm software migration" in probes, str(probes))
     check("probes never re-price what is known",
           not (set(probes) & known))
     check("probes are deterministic",
-          probes == K.probe_candidates(["crm software"], ["pricing"],
-                                       known, limit=9))
+          probes == K.probe_candidates(["crm software"],
+                                       ["migration", "cheap"], known,
+                                       limit=9))
 
     print("claims")
     claims = insights.generate(g)
@@ -108,6 +121,20 @@ def offline() -> None:
     check("contradictory claims coexist before judging",
           {"settled", "open"} <= {c.kind for c in claims} or
           len([c for c in claims if c.kind in ("settled", "open")]) >= 1)
+
+    print("permutations")
+    g2 = K.Graph("garden rooms")
+    g2.add_rows([
+        {"term": "garden rooms", "volume": 40500, "cpc": 3.11,
+         "competition_index": 100, "low_bid": 1.0, "high_bid": 6.0,
+         "trend": [], "months": [], "source": "x"},
+        {"term": "rooms garden", "volume": 40500, "cpc": 3.11,
+         "competition_index": 100, "low_bid": 1.0, "high_bid": 6.0,
+         "trend": [], "months": [], "source": "x"}])
+    check("the same searches are not counted twice under two word orders",
+          len(g2.keywords) == 1 and g2.total_volume == 40500
+          and g2.collapsed == 1,
+          f"{len(g2.keywords)} kw / {g2.total_volume} vol")
 
     print("backtracking")
     before = len(g.keywords)
