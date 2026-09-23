@@ -1,0 +1,52 @@
+{
+  "expectations": [
+    {
+      "text": "The deliverable is a markdown file, not just chat output",
+      "passed": true,
+      "evidence": "19772 chars"
+    },
+    {
+      "text": "Findings cite real monthly search volumes for named keywords",
+      "passed": true,
+      "evidence": "29 volume figures"
+    },
+    {
+      "text": "Findings cite real click prices (CPC or top-of-page bid)",
+      "passed": true,
+      "evidence": "145 price figures"
+    },
+    {
+      "text": "The report states what the research actually cost",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "At least one finding is about what searchers are trying to do, not just how many there are",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "No single observation is restated more than twice as separate findings",
+      "passed": true,
+      "evidence": "most repeated shape appears 1x across 1 findings"
+    },
+    {
+      "text": "The report says what it does NOT know, or what it checked and could not confirm",
+      "passed": true,
+      "evidence": ""
+    },
+    {
+      "text": "The data is United Kingdom, not United States (location is stated or GBP figures are used)",
+      "passed": true,
+      "evidence": "UK=True US=False"
+    },
+    {
+      "text": "The report connects its findings to where the GBP4k of ad budget would go",
+      "passed": true,
+      "evidence": ""
+    }
+  ],
+  "passed": 9,
+  "of": 9,
+  "output_file": "garden-rooms-google-ads-uk.md"
+}

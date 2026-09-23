@@ -27,7 +27,21 @@ compresses.
    criterion becomes a REFUTED verdict, check the relevant trap: instrument
    blindness is INCONCLUSIVE (Phase 5), never refutation.
 
-## Availability check (Phase 0, free)
+## Availability check (INTAKE, free)
+
+Judgment first — `judge.py` needs it, and finding out later wastes the budget:
+
+```bash
+python3 .claude/skills/demand-forecasting/scripts/jev.py check
+```
+
+It reports which variable supplied the key (`TYPESAFE_API_KEY`, else
+`TYPESAFEAI_API_KEY`, else `.env`) plus a one-way fingerprint, never the key
+itself, and makes one round-trip to confirm the endpoint answers. Offline
+means every `judge.py` stage is unavailable: you read the rows yourself, and
+the report says which judgments were unaudited.
+
+Then the paid instruments:
 
 ```bash
 # Which instrument families are online?
@@ -58,6 +72,10 @@ metadata-only `smoke_test.py`. Record the result in the mission brief.
 | **Competitor & capital** | dataforseo-ads-transparency, brightdata-serp, apple-ads, brightdata-crunchbase, brightdata-pitchbook | Sustained ads and what they say (best explained by working unit economics — P5 names the rivals), funding flowing in, competitor census |
 | **B2B demand & sizing** | brightdata-linkedin, brightdata-zoominfo | Salaries paid for the pain; market head-count/firmographics |
 | **Direct probe** | email-guesser, email-verify, resend | Real outreach smoke test — **gated, see bottom** |
+
+Jev is not a signal family. It reads what the instruments above return; it
+never supplies evidence of its own, and a claim whose only support is a Jev
+answer is not triangulated. See `references/jev-contract.md`.
 
 Voice-of-customer rides along with marketplace/social pulls; for
 triangulation counting, the five independent families are: search,
@@ -335,6 +353,7 @@ posture: propose it in the report as a confirmation test, don't run it.
 | serp query | ~$0.003–0.01 (and 1 of 100/day) |
 | dataforseo-keywords any op | ~$0.05–0.10 (batch to 1000!) |
 | appstore `listings` | ~$0.10 (avoid unless filtering) |
+| jev judgment (any `judge.py` stage) | ~$0.0001–0.002 — ledgered separately, never against the instrument budget |
 
 A full loop for one idea typically lands at **$0.50–$2.00** when batched
 properly. If your plan estimates above the remaining budget, cut scope at

@@ -1,0 +1,40 @@
+{
+  "skill_name": "keyword-insights",
+  "evals": [
+    {
+      "id": 0,
+      "name": "meal-planning-market",
+      "prompt": "I'm thinking about building something in the meal planning space but honestly I have no idea if there's anything actually there or if it's a graveyard. Can you dig into it properly and give me a writeup I can send my cofounder? She'll want to see the numbers, not vibes.",
+      "expected_output": "A markdown file of findings about the meal planning search market, each backed by real search volume / CPC figures, with the cost of the research stated.",
+      "files": [],
+      "assertions": [
+        "The deliverable is a markdown file, not just chat output",
+        "Findings cite real monthly search volumes for named keywords",
+        "Findings cite real click prices (CPC or top-of-page bid)",
+        "The report states what the research actually cost",
+        "At least one finding is about what searchers are trying to do, not just how many there are",
+        "No single observation is restated more than twice as separate findings",
+        "The report says what it does NOT know, or what it checked and could not confirm",
+        "The report reaches a clear verdict on whether there is a market here, rather than only listing data"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "garden-room-ads",
+      "prompt": "we're about to drop \u00a34k into google ads for garden rooms (uk, we build them) and i want to know what we're walking into before we spend it. what are people actually searching and where does the money go. write it up for me",
+      "expected_output": "A markdown file about the UK garden room search market: what people search, what they want, where click prices concentrate \u2014 grounded in UK data, not US.",
+      "files": [],
+      "assertions": [
+        "The deliverable is a markdown file, not just chat output",
+        "Findings cite real monthly search volumes for named keywords",
+        "Findings cite real click prices (CPC or top-of-page bid)",
+        "The report states what the research actually cost",
+        "At least one finding is about what searchers are trying to do, not just how many there are",
+        "No single observation is restated more than twice as separate findings",
+        "The report says what it does NOT know, or what it checked and could not confirm",
+        "The data is United Kingdom, not United States (location is stated or GBP figures are used)",
+        "The report connects its findings to where the GBP4k of ad budget would go"
+      ]
+    }
+  ]
+}

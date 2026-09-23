@@ -36,6 +36,31 @@ GLYPHS = {
 AXES = ["who", "pain", "wedge", "channel", "model"]
 DEFAULT_ROOT = os.path.join("research", "demand")
 
+# --------------------------------------------------------------- the machine
+#
+# The loop is a state machine, and this is the only copy of it. SKILL.md draws
+# it; this table enforces it. A transition that is not listed here is a bug in
+# the loop, not a judgement call — which is the point: the expensive failure
+# mode is spending the budget in EXPERIMENT on a card that was never frozen,
+# or reporting from a maze nothing was ever measured in.
+#
+#   state -> (what happens here, legal next states)
+MACHINE = {
+    "INTAKE":       ("brief, budget, bar, scope check", ["MAP"]),
+    "MAP":          ("decompose the idea into nodes", ["PROBE"]),
+    "PROBE":        ("batched measurement, triage, score the frontier",
+                     ["HYPOTHESIZE", "MAP", "REPORT"]),
+    "HYPOTHESIZE":  ("pre-register cards; explanations must be hard to vary",
+                     ["EXPERIMENT", "PROBE"]),
+    "EXPERIMENT":   ("spend, cheapest killer first", ["JUDGE"]),
+    "JUDGE":        ("price with cac.py, verdict with judge.py", ["TRAVERSE"]),
+    "TRAVERSE":     ("update the maze, spawn and prune, re-rank",
+                     ["PROBE", "HYPOTHESIZE", "REPORT"]),
+    "REPORT":       ("write the dossier", ["DECIDE"]),
+    "DECIDE":       ("hand the options menu to the user", []),
+}
+INITIAL_STATE = "INTAKE"
+
 
 def now() -> str:
     return datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -135,6 +160,8 @@ def cmd_init(args):
         },
         "budget": {"usd_cap": args.budget_usd, "spent_usd": 0.0, "calls": 0, "ledger": []},
         "counter": {"node": 0, "exp": 0},
+        "state": INITIAL_STATE,
+        "state_history": [{"ts": now(), "state": INITIAL_STATE, "note": "lab opened"}],
         "nodes": {},
         "experiments": {},
     }
@@ -321,6 +348,77 @@ def cmd_tree(args):
         print("  (empty — add nodes with `maze.py add`)")
 
 
+def guards(maze: dict) -> list[tuple[str, bool, str]]:
+    """Machine-checkable preconditions, as (label, holds, detail).
+
+    Only the ones a script can settle. The judgement calls — is the maze one
+    you would defend, did the card freeze before the data moved — stay with
+    the agent, and are listed in the transition notes instead of faked here.
+    """
+    nodes = maze.get("nodes") or {}
+    budget = maze.get("budget") or {}
+    cap = budget.get("usd_cap") or 0.0
+    spent = budget.get("spent_usd") or 0.0
+    scored = [n for n in nodes.values() if n.get("demand") is not None]
+    open_nodes = [n for n in nodes.values() if n.get("status") in
+                  ("unexplored", "probed", "hypothesized")]
+    probed = [n for n in nodes.values() if n.get("status") != "unexplored"]
+    axis_values = {a: {(n.get("axes") or {}).get(a) for n in nodes.values()} - {None}
+                   for a in AXES}
+    spread = sum(1 for a in AXES if len(axis_values[a]) >= 2)
+    best = max((n.get("demand") or 0) for n in nodes.values()) if nodes else 0
+    return [
+        (">= 10 nodes mapped", len(nodes) >= 10, f"{len(nodes)} nodes"),
+        ("breadth on >= 2 axes", spread >= 2,
+         ", ".join(f"{a}:{len(axis_values[a])}" for a in AXES)),
+        ("every node has a demand score", bool(nodes) and len(scored) == len(nodes),
+         f"{len(scored)}/{len(nodes)} scored"),
+        ("something worth deepening (best demand >= 3)", best >= 3, f"best {best}"),
+        ("frontier non-empty", bool(open_nodes), f"{len(open_nodes)} open"),
+        ("budget below 90%", not cap or spent < 0.9 * cap,
+         f"${spent:.4f} of ${cap:.2f}"),
+        ("at least one node probed", bool(probed), f"{len(probed)} probed"),
+        ("a node VALIDATED", any(n.get("status") == "validated" for n in nodes.values()),
+         ""),
+    ]
+
+
+def cmd_state(args):
+    lab = find_lab(args)
+    maze = load(lab)
+    current = maze.get("state", INITIAL_STATE)
+
+    if args.set:
+        target = args.set.upper()
+        if target not in MACHINE:
+            die(f"unknown state {target}; have: {', '.join(MACHINE)}")
+        legal = MACHINE[current][1]
+        if target not in legal and not args.force:
+            die(f"{current} -> {target} is not a transition in this machine. "
+                f"Legal from {current}: {', '.join(legal) or '(terminal)'}. "
+                f"Pass --force only if you can say in the notebook why the loop "
+                f"is leaving its own rails.")
+        maze["state"] = target
+        maze.setdefault("state_history", []).append(
+            {"ts": now(), "state": target, "from": current, "note": args.note,
+             "forced": bool(args.force and target not in legal)})
+        save(lab, maze)
+        print(f"state: {current} -> {target}"
+              + ("  (FORCED — say why in the notebook)"
+                 if args.force and target not in legal else ""))
+        if args.note:
+            print(f"  note: {args.note}")
+        current = target
+
+    what, legal = MACHINE[current]
+    print(f"state: {current} — {what}")
+    print("next:  " + (", ".join(legal) if legal else "(terminal — the decision is the user's)"))
+    print("\nguards (machine-checkable only):")
+    for label, holds, detail in guards(maze):
+        mark = "yes" if holds else " no"
+        print(f"  [{mark}] {label}" + (f"  ({detail})" if detail else ""))
+
+
 def cmd_status(args):
     lab = find_lab(args)
     maze = load(lab)
@@ -331,6 +429,8 @@ def cmd_status(args):
     cap = b["usd_cap"]
     pct = 100.0 * b["spent_usd"] / cap if cap else 0.0
     print(f"lab: {lab}")
+    print(f"state: {maze.get('state', INITIAL_STATE)} "
+          f"-> {', '.join(MACHINE[maze.get('state', INITIAL_STATE)][1]) or '(terminal)'}")
     print(f"idea: {maze['idea']} · geo {maze['geo']} · created {maze['created']}")
     bar = maze["bar"]
     print(f"bar: cluster >= {bar['min_monthly_cluster_volume']}/mo · >= "
@@ -340,6 +440,14 @@ def cmd_status(args):
           + (", ".join(f"{k} {v}" for k, v in sorted(counts.items())) or "none"))
     print(f"experiments: {len(maze['experiments'])}")
     print(f"budget: ${b['spent_usd']:.4f} of ${cap:.2f} ({pct:.0f}%) · {b['calls']} billable calls")
+    j = maze.get("jev")
+    if j:
+        # Kept apart from the instrument budget on purpose: judgment costs
+        # thousandths of a cent, instruments cost real money, and blending
+        # them would hide which one is actually running out.
+        print(f"jev: ${j.get('usd', 0):.6f} · {j.get('requests', 0)} requests · "
+              f"{j.get('input_tokens', 0):,} input tokens · "
+              f"{j.get('seconds', 0):.1f}s (not billed against the instrument budget)")
     if cap and b["spent_usd"] >= 0.9 * cap:
         print("WARNING: >=90% budget — stopping condition.")
     validated = [nid for nid, n in maze["nodes"].items() if n["status"] == "validated"]
@@ -412,6 +520,14 @@ def main(argv=None):
     sp = sub.add_parser("tree", help="render the maze")
     sp.set_defaults(fn=cmd_tree)
 
+    sp = sub.add_parser("state", help="show or advance the loop's state machine")
+    sp.add_argument("--set", metavar="STATE",
+                    help=f"advance to a state ({', '.join(MACHINE)})")
+    sp.add_argument("--note", help="why this transition, for the history")
+    sp.add_argument("--force", action="store_true",
+                    help="allow a transition the machine does not define")
+    sp.set_defaults(fn=cmd_state)
+
     sp = sub.add_parser("status", help="lab summary")
     sp.set_defaults(fn=cmd_status)
 
@@ -419,5 +535,20 @@ def main(argv=None):
     args.fn(args)
 
 
+def _quiet_broken_pipe() -> None:
+    """Exit quietly when stdout closes early, e.g. `maze.py state | head -3`.
+
+    Python turns SIGPIPE into BrokenPipeError and prints a traceback at
+    shutdown; restoring the default handler makes these CLIs behave like any
+    other command in a pipeline.
+    """
+    try:
+        import signal
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    except (ImportError, AttributeError, ValueError):
+        pass  # not POSIX, or not on the main thread
+
+
 if __name__ == "__main__":
+    _quiet_broken_pipe()
     main()

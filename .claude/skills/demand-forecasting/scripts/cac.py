@@ -280,5 +280,20 @@ def main(argv=None):
         print(f"banked: {args.json}")
 
 
+def _quiet_broken_pipe() -> None:
+    """Exit quietly when stdout closes early, e.g. `maze.py state | head -3`.
+
+    Python turns SIGPIPE into BrokenPipeError and prints a traceback at
+    shutdown; restoring the default handler makes these CLIs behave like any
+    other command in a pipeline.
+    """
+    try:
+        import signal
+        signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    except (ImportError, AttributeError, ValueError):
+        pass  # not POSIX, or not on the main thread
+
+
 if __name__ == "__main__":
+    _quiet_broken_pipe()
     main()
